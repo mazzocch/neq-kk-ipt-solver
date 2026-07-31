@@ -112,11 +112,9 @@ def build_equilibrium_fixture() -> tuple[dict, dict]:
         }
 
     meta["source"] = (
-        "electric_field_hypercubic/preliminary_tests/march12 (single-band IPT, T=0.05, "
-        "U=5.5, Bethe-lattice-like hybridization, two impurity levels eps=0 and eps=-3). "
-        "n_double recomputed from the raw GF/SE arrays via the exact Keldysh "
-        "Galitskii-Migdal expression, not taken from the stored 'N_double' field. "
-        "Hybridization and GF/SE arrays are in the companion .npz file."
+        "Equilibrium single-band IPT, T=0.05, U=5.5, Bethe-lattice-like hybridization, "
+        "two impurity levels eps=0 and eps=-3. Hybridization and GF/SE arrays are in the "
+        "companion .npz file."
     )
     return meta, npz_arrays
 
