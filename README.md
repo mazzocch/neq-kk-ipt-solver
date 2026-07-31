@@ -48,8 +48,10 @@ from neq_kk_ipt_solver import Solver
 
 input_data = {
     "global_parameters": {
-        "N_points": 4001,
-        "w_max": 20.0,
+        # N_points/w_max: see "Numerical considerations / caveats" below --
+        # these two values are a good, safe default, not just a fast toy grid.
+        "N_points": 10001,
+        "w_max": 50.0,
         "U": 3.0,
         "flavors": ["up", "down"],
     },
@@ -148,6 +150,34 @@ Common to all three:
 | Key | Type | Description |
 |---|---|---|
 | `output_dir` | string | Directory `store_output()` writes results into. Required. |
+
+## Numerical considerations / caveats
+
+**The frequency grid (`N_points`, `w_max`) has to be wide and fine enough,
+or results silently degrade rather than error out.** The solver works
+entirely in the frequency domain, and two of its key steps rely on the
+imaginary parts of the relevant functions having already decayed to
+(near) zero well before the edges of the grid:
+
+- The IPT self-energy diagram is built by convolving the Weiss field with
+  itself (`scipy.signal.convolve`, in `_calc_IPT_diagram`). If the Weiss
+  field's imaginary part hasn't decayed by the grid edges, the convolution
+  suffers boundary/wrap-around effects.
+- The real part of every retarded quantity (`G0`, the IPT diagram, `Sigma`)
+  is reconstructed from its imaginary part via the Kramers-Kronig relation
+  (`KK()`, a padded Hilbert transform). This reconstruction degrades the
+  same way once the tails aren't negligible at the edges.
+
+In practice, `w_max` needs to be large relative to `U` and the
+hybridization bandwidth for this decay to actually happen, and `N_points`
+needs to be fine enough to resolve the resulting features once it has.
+**`N_points=10001` and `w_max=50` (used throughout this repo's own test
+fixtures) is a good, safe starting point** for most `U`/`T`/bandwidth
+combinations of interest. Smaller grids (e.g. for a quick interactive check)
+can converge and report `success=True` while still being quietly
+inaccurate -- there is no built-in check for this, so it is worth
+confirming that the relevant spectral weight has actually decayed near
+`+/-w_max` before trusting a result computed on a coarser grid.
 
 ## API overview
 
