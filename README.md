@@ -178,6 +178,24 @@ approximate formula that coincides with the exact one only in equilibrium;
 this is confirmed explicitly by the test suite (matches to ~1e-14 in
 equilibrium, differs by ~6-7e-5 away from it).
 
+## Citing this code
+
+This solver is released under the MIT license because we believe in open
+science: the code should be freely available for anyone to inspect, use,
+reuse, and build on, with no strings attached.
+
+That said, if this solver is useful to your own work, we would be very
+pleased — and would greatly appreciate — a citation of the paper it was
+originally written for:
+
+> T. M. Mazzocchi and E. Arrigoni, "Extension of the iterated perturbation
+> theory at arbitrary fillings to nonequilibrium steady states",
+> arXiv:2604.15942 (2026).
+> https://doi.org/10.48550/arXiv.2604.15942
+
+This preprint is currently under peer review in Phys. Rev. B; the reference
+above will be updated to the published journal version once it is available.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

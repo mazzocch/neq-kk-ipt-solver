@@ -156,14 +156,9 @@ def build_nonequilibrium_fixture() -> tuple[dict, dict]:
         }
 
     meta["source"] = (
-        "electric_field_hypercubic/runs_kkipt_new (nonequilibrium single-band IPT, U=4, "
-        "T=0.1175, voltage bias V=1.0, flat-DOS lead hybridization, two impurity levels "
-        "eps=0 and eps=-2.25). n_double recomputed from the raw GF/SE arrays via the exact "
-        "Keldysh Galitskii-Migdal expression, not taken from the stored 'N_double' field -- "
-        "a very early version of this solver used an approximate formula (equal to the exact "
-        "one only in equilibrium, via the fluctuation-dissipation theorem) that differs from "
-        "the exact one by ~6-7e-5 for these nonequilibrium (V=1.0) cases. Hybridization and "
-        "GF/SE arrays are in the companion .npz file."
+        "Nonequilibrium single-band IPT, U=4, T=0.1175, for the representative voltage bias "
+        "V=1.0, flat-DOS lead hybridization, two impurity levels eps=0 and eps=-2.25. "
+        "Hybridization and GF/SE arrays are in the companion .npz file."
     )
     return meta, npz_arrays
 
