@@ -6,9 +6,11 @@ steady states, with an optional Potthoff-Wegner-Nolting [Phys. Rev. B 55,
 16132 (1997)] m=3 moment band-shift correction (tested but not benchmarked yet).
 
 This version has been authored by Tommaso Maria Mazzocchi and used to generate 
-the results at this link: https://doi.org/10.48550/arXiv.2604.15942.
+the results discussed at this link: https://doi.org/10.48550/arXiv.2604.15942.
+The preprint is currenly undergoing peer review in Phys. Rev. B and the DOI
+will be updated as soon as the manuscript gets published in the journal.
 The full dataset is available at: https://repository.tugraz.at/records/xz6v9-9jp08.
-The preprint is currenly undergoing peer review in Phys. Rev. B.
+
 
 ## Physics background
 
