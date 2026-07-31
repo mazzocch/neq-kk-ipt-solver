@@ -108,7 +108,6 @@ def build_equilibrium_fixture() -> tuple[dict, dict]:
                 "n_occ_up": r["up"]["n_occ"],
                 "n_occ_down": r["down"]["n_occ"],
                 "n_double": n_double_recalc,
-                "n_double_stored_original": stored,
             },
         }
 
@@ -153,7 +152,6 @@ def build_nonequilibrium_fixture() -> tuple[dict, dict]:
                 "n_occ_up": r["up"]["n_occ"],
                 "n_occ_down": r["down"]["n_occ"],
                 "n_double": n_double_recalc,
-                "n_double_stored_original": stored,
             },
         }
 

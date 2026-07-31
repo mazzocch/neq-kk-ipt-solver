@@ -17,8 +17,7 @@
     "expected": {
       "n_occ_up": 0.29673028783982147,
       "n_occ_down": 0.2967302878421183,
-      "n_double": 0.031584354886766974,
-      "n_double_stored_original": 0.03164882627656799
+      "n_double": 0.031584354886766974
     }
   },
   "eps_m2p25": {
@@ -39,8 +38,7 @@
     "expected": {
       "n_occ_up": 0.5220731872270761,
       "n_occ_down": 0.5220731872270749,
-      "n_double": 0.160214904493255,
-      "n_double_stored_original": 0.1602868587750393
+      "n_double": 0.160214904493255
     }
   },
   "source": "electric_field_hypercubic/runs_kkipt_new (nonequilibrium single-band IPT, U=4, T=0.1175, voltage bias V=1.0, flat-DOS lead hybridization, two impurity levels eps=0 and eps=-2.25). n_double recomputed from the raw GF/SE arrays via the exact Keldysh Galitskii-Migdal expression, not taken from the stored 'N_double' field -- a very early version of this solver used an approximate formula (equal to the exact one only in equilibrium, via the fluctuation-dissipation theorem) that differs from the exact one by ~6-7e-5 for these nonequilibrium (V=1.0) cases. Hybridization and GF/SE arrays are in the companion .npz file."

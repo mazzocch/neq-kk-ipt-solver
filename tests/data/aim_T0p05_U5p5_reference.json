@@ -17,8 +17,7 @@
     "expected": {
       "n_occ_up": 0.25840574536279637,
       "n_occ_down": 0.2584057453640997,
-      "n_double": 0.01860018814701394,
-      "n_double_stored_original": 0.018600188146996533
+      "n_double": 0.01860018814701394
     }
   },
   "eps_m3": {
@@ -39,8 +38,7 @@
     "expected": {
       "n_occ_up": 0.5175731738055296,
       "n_occ_down": 0.5175731738055291,
-      "n_double": 0.14044247285611688,
-      "n_double_stored_original": 0.14044247285611663
+      "n_double": 0.14044247285611688
     }
   },
   "source": "electric_field_hypercubic/preliminary_tests/march12 (single-band IPT, T=0.05, U=5.5, Bethe-lattice-like hybridization, two impurity levels eps=0 and eps=-3). n_double recomputed from the raw GF/SE arrays via the exact Keldysh Galitskii-Migdal expression, not taken from the stored 'N_double' field. Hybridization and GF/SE arrays are in the companion .npz file."

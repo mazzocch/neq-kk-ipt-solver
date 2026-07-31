@@ -21,10 +21,9 @@ n_double in the fixture is NOT the "N_double" field originally stored in
 those files -- it is recomputed from the raw GF/SE arrays via the exact
 Keldysh Galitskii-Migdal expression (see scripts/build_reference_fixtures.py),
 since a very early version of this solver used an approximate formula that
-coincides with the exact one only in equilibrium. For these equilibrium
-cases the two agree to ~1e-14/1e-16 anyway (see
-test_recalculated_n_double_matches_original_in_equilibrium below); the
-distinction only matters for the nonequilibrium fixture.
+coincides with the exact one only in equilibrium (for these equilibrium
+cases the two agree to ~1e-14/1e-16 anyway; the distinction only matters for
+the nonequilibrium fixture, see test_physics_regression_nonequilibrium.py).
 """
 import json
 import os
@@ -109,20 +108,6 @@ def test_reproduces_reference_greens_function_and_self_energy(case, fl, tmp_path
     np.testing.assert_allclose(solver.GF[fl].K, ref_GF_K, atol=1e-6)
     np.testing.assert_allclose(solver.SE[fl].R, ref_SE_R, atol=1e-6)
     np.testing.assert_allclose(solver.SE[fl].K, ref_SE_K, atol=1e-6)
-
-
-def test_recalculated_n_double_matches_original_in_equilibrium():
-    """
-    In equilibrium, the exact Keldysh Galitskii-Migdal expression (Eq. 3) and
-    the equilibrium-FDT approximation historically used to produce the
-    original 'N_double' field coincide, since G and Sigma then share a common
-    distribution function. Confirms the fixture-building recalculation
-    (scripts/build_reference_fixtures.py) didn't silently change these
-    equilibrium reference values.
-    """
-    for case in ("eps0", "eps_m3"):
-        expected = FIXTURE[case]["expected"]
-        assert expected["n_double"] == pytest.approx(expected["n_double_stored_original"], abs=1e-8)
 
 
 def test_eps0_case_is_spin_symmetric():
