@@ -1,0 +1,132 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "static": {
+        "type": "object",
+        "properties": {
+          "store": {
+            "type": "boolean",
+            "description": "Sets whether output of the solver should be stored. Default is 'true'."
+          },
+          "spin_sym": {
+            "type": "boolean",
+            "description": "Decides on spin symmetry. Default is 'true'."
+          },
+          "ph_sym": {
+            "type": "boolean",
+            "description": "Flag for particle-hole symmetry. Default is 'true'."
+          },
+          "use_potthoff_band_shift": {
+            "type": "boolean",
+            "description": "Enables the Potthoff-Wegner-Nolting (PRB 55, 16132) m=3 moment band-shift correction to the IPT self-energy. Default is 'false', which reproduces the plain KK-IPT-n0 scheme."
+          },
+          "band_shift_inner_maxiter": {
+            "type": "integer",
+            "description": "Maximum number of inner fixed-point iterations used to determine the interacting band shift B_tilde when 'use_potthoff_band_shift' is true. Default is 30."
+          },
+          "band_shift_mixing": {
+            "type": "number",
+            "description": "Linear mixing parameter in (0, 1] for the inner B_tilde fixed-point iteration. Default is 0.5."
+          },
+          "band_shift_tol": {
+            "type": "number",
+            "description": "Convergence tolerance (max |dB_tilde|) for the inner B_tilde fixed-point iteration. Default is 1e-8."
+          }
+        },
+        "additionalProperties": false
+      },
+      "modifiable": {
+        "type": "object",
+        "properties": {
+          "impurity_onsite_e": {
+            "type": "object",
+            "description": "On-site energy of the impurity. If 'ph_sym' is set to 'true' this is set automatically."
+          }
+        },
+        "additionalProperties": false
+      },
+      "dynamic":{
+        "type": "object",
+        "properties": {
+            "Delta_R_im": {
+              "type": "object",
+              "description": "Imaginary part of retarded component of the hybridisation function for each flavor."
+            },
+            "Delta_K_im": {
+              "type": "object",
+              "description": "Imaginary part of Keldysh component of the hybridisation function for each flavor."
+            },
+            "T": {
+              "type": "number",
+              "description": "Physical temperature, used to evaluate the Fermi functions of the leads for both the flat-DOS and Lorentzian hybridizations. Not needed when the hybridization is given directly via 'Delta_R_im'/'Delta_K_im'."
+            },
+            "T_fict": {
+              "type": "number",
+              "description": "Fictitious inverse temperature for constructing the flat DOS."
+            },
+            "D_l": {
+              "type": "number",
+              "description": "Half-bandwidth of the left lead contributing to the hybridization."
+            },
+            "D_r": {
+              "type": "number",
+              "description": "Half-bandwidth of the right lead contributing to the hybridizations."
+            },
+            "t_l": {
+              "type": "number",
+              "description": "Hopping amplitude between the left lead and the impurity."
+            },
+            "t_r": {
+              "type": "number",
+              "description": "Hopping amplitude between the right lead and the impurity."
+            },
+            "mu": {
+              "type": "number",
+              "description": "Chemical potential of bath hybridization function."
+            },
+            "V": {
+              "type": "number",
+              "description": "Applied voltage bias between the leads."
+            },
+            "Delta_center": {
+              "oneOf": [
+                {"type": "number"},
+                {"type": "object"}
+              ],
+              "description": "Center(s) of the Lorentzian hybridization. A single number gives a spin-symmetric (degenerate) hybridization shared by both flavors; a per-flavor object (e.g. {'up': 1.0, 'down': -1.0}) gives a spin-dependent one."
+            },
+            "Delta_gamma": {
+              "oneOf": [
+                {"type": "number"},
+                {"type": "object"}
+              ],
+              "description": "Width(s) of the Lorentzian hybridization, same single-number-vs-per-flavor-object convention as 'Delta_center'."
+            },
+            "output_dir": {
+            "type": "string",
+            "description": "Directory in which the results are stored."
+            }
+        },
+        "required": [
+          "output_dir"
+        ],
+        "oneOf": [
+            {
+              "required": ["T", "T_fict", "D_l", "D_r", "t_l", "t_r", "mu", "V"]
+            },
+            {
+              "required": ["Delta_R_im", "Delta_K_im"]
+            },
+            {
+              "required": ["T", "Delta_center", "Delta_gamma", "mu", "V"]
+            }
+          ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "static"
+    ],
+    "additionalProperties": false
+}

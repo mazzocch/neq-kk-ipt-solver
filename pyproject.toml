@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neq-kk-ipt-solver"
+version = "0.1.0"
+description = "Nonequilibrium Kajueter-Kotliar Iterated Perturbation Theory (IPT) impurity solver"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Tommaso Maria Mazzocchi" },
+]
+keywords = ["DMFT", "IPT", "Keldysh", "nonequilibrium", "impurity solver", "strongly correlated electrons"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "jsonschema>=4.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.urls]
+Repository = "https://github.com/mazzocch/neq-kk-ipt-solver"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+neq_kk_ipt_solver = ["schemas/*.json"]

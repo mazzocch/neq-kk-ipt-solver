@@ -1,0 +1,48 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "N_points": {
+            "type": "integer",
+            "description": "Number of points in frequency domain."
+        },
+        "w_max": {
+            "type": "number",
+            "description": "Maximum value of frequency."
+        },
+        "U": {
+            "type": "number",
+            "description": "Value of the Hubbard interaction."
+        },
+        "flavors": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Contains the flavors. So far only implemented for 'up' and 'down'."
+        },
+        "J": {
+            "type": "number",
+            "description": "Hund's coupling in the Hubbard-Kanamori Hamiltonian (rotational-invariant systems)."
+        },
+        "Up": {
+            "type": "number",
+            "description": "Inter-orbital interaction among opposite spins in the Hubbard-Kanamori Hamiltonian."
+        },
+        "Upp": {
+            "type": "number",
+            "description": "Inter-orbital interaction among same spins in the Hubbard-Kanamori Hamiltonian."
+        },
+        "strict": {
+            "type": "boolean",
+            "description": "Raises an error if a json validation fails. Default is 'False'."
+        }
+    },
+    "additionalProperties": false,
+    "required": [
+        "N_points",
+        "w_max",
+        "U",
+        "flavors"
+    ]
+}
