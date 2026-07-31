@@ -1,32 +1,30 @@
 # neq-kk-ipt-solver
 
-A nonequilibrium Kajueter-Kotliar Iterated Perturbation Theory (IPT) impurity
-solver, extended to arbitrary filling and to genuine nonequilibrium (Keldysh)
-steady states, with an optional Potthoff-Wegner-Nolting (Phys. Rev. B 55,
-16132 (1997)) m=3 moment band-shift correction.
+A Kajueter-Kotliar Iterated Perturbation Theory (IPT) [Phys. Rev. Lett. 77, 131 (1996)]
+impurity solver for arbitrary filling extended to nonequilibrium (Keldysh)
+steady states, with an optional Potthoff-Wegner-Nolting [Phys. Rev. B 55,
+16132 (1997)] m=3 moment band-shift correction (tested but not benchmarked yet).
 
-This is a standalone extraction of the single-band impurity solver used in
-Mazzocchi, Werner, Aichhorn, Arrigoni, *A steady-state study of the
-nonequilibrium properties of realistic materials: Application of the mixed
-configuration approximation*, arXiv:2602.05664, and in the two-orbital
-benchmarks of Mazzocchi, Werner, Aichhorn, Arrigoni, Phys. Rev. B **112**,
-155127 (2025) [arXiv:2507.10717].
+This version has been authored by Tommaso Maria Mazzocchi and used to generate 
+the results at this link: https://doi.org/10.48550/arXiv.2604.15942.
+The full dataset is available at: https://repository.tugraz.at/records/xz6v9-9jp08.
+The preprint is currenly undergoing peer review in Phys. Rev. B.
 
 ## Physics background
 
-The solver implements the Kajueter-Kotliar interpolative self-energy ansatz
-for the single-impurity Anderson model, generalized away from half-filling
-and particle-hole symmetry, and formulated on the Keldysh contour so it
-applies equally to equilibrium and genuine nonequilibrium (voltage- or
-temperature-biased) steady states. Given a hybridization function Delta(w)
-(retarded and Keldysh components) and Hubbard interaction U, it solves a
-coupled 4-dimensional nonlinear root problem (auxiliary chemical potential
-mu0 and occupation n, for each spin flavor) to determine the impurity
-self-energy and Green's function self-consistently.
+The solver implements the Kajueter-Kotliar [Phys. Rev. Lett. 77, 131 (1996)]
+interpolative self-energy ansatz for the single-impurity Anderson model,
+generalized away from half-filling and particle-hole symmetry, and formulated
+on the Keldysh contour so it applies equally to equilibrium and nonequilibrium
+(e.g., voltage- or temperature-biased) steady states.
+Given a hybridization function Delta(w) (retarded and Keldysh components)
+and Hubbard interaction U, it solves a coupled 4-dimensional nonlinear root
+problem (auxiliary chemical potential mu0 and occupation n, for each spin flavor)
+to determine the impurity self-energy and Green's function self-consistently.
 
 An optional correction (`use_potthoff_band_shift`) adds the nonequilibrium
 Keldysh analogue of the Potthoff-Wegner-Nolting m=3 moment band-shift term
-(Phys. Rev. B 55, 16132 (1997)) to the self-energy.
+[Phys. Rev. B 55, 16132 (1997)] to the self-energy (tested but not benchmarked yet).
 
 ## Installation
 
@@ -166,6 +164,11 @@ This is an early (v0.1.0) extraction from a larger research codebase. The
 core physics has been validated against published benchmarks (see the papers
 above); the packaging, test coverage, and documentation here are a minimum
 viable version, not yet exhaustive.
+
+Test coverage includes physics regression tests reproducing real, previously
+computed single-band IPT results in both the equilibrium (U=5.5, T=0.05,
+two impurity levels) and genuine nonequilibrium, voltage-biased (U=4,
+T=0.1175, V=1.0, two impurity levels) regimes.
 
 ## License
 
