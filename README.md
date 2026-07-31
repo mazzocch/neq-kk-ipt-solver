@@ -168,7 +168,15 @@ viable version, not yet exhaustive.
 Test coverage includes physics regression tests reproducing real, previously
 computed single-band IPT results in both the equilibrium (U=5.5, T=0.05,
 two impurity levels) and genuine nonequilibrium, voltage-biased (U=4,
-T=0.1175, V=1.0, two impurity levels) regimes.
+T=0.1175, V=1.0, two impurity levels) regimes -- benchmarking the full
+Green's function and self-energy (both flavors), not just the scalar
+occupations. The double occupancy in these fixtures is recomputed from the
+raw reference data via the exact Keldysh Galitskii-Migdal expression
+(`scripts/build_reference_fixtures.py`) rather than trusted from the
+originally-stored value, since a very early version of this solver used an
+approximate formula that coincides with the exact one only in equilibrium;
+this is confirmed explicitly by the test suite (matches to ~1e-14 in
+equilibrium, differs by ~6-7e-5 away from it).
 
 ## License
 

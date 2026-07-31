@@ -12,7 +12,19 @@ auxiliary master equation solver) in that project, giving N_double=0.02433
 ballpark of these, not identical to them. What IS asserted here is that this
 extracted Solver reproduces the ORIGINAL IPT solver_output exactly (same
 algorithm, same input -> same output to numerical-solver tolerance), which is
-the correctness bar for this extraction.
+the correctness bar for this extraction. This includes the full Green's
+function and self-energy (not just the scalar occupations), so a change that
+gets the observables right by accident but the spectral data wrong would
+still be caught.
+
+n_double in the fixture is NOT the "N_double" field originally stored in
+those files -- it is recomputed from the raw GF/SE arrays via the exact
+Keldysh Galitskii-Migdal expression (see scripts/build_reference_fixtures.py),
+since a very early version of this solver used an approximate formula that
+coincides with the exact one only in equilibrium. For these equilibrium
+cases the two agree to ~1e-14/1e-16 anyway (see
+test_recalculated_n_double_matches_original_in_equilibrium below); the
+distinction only matters for the nonequilibrium fixture.
 """
 import json
 import os
@@ -69,6 +81,40 @@ def test_reproduces_reference_occupations(case, tmp_path):
     assert solver.n_occ["up"] == pytest.approx(expected["n_occ_up"], abs=1e-4)
     assert solver.n_occ["down"] == pytest.approx(expected["n_occ_down"], abs=1e-4)
     assert solver.n_double == pytest.approx(expected["n_double"], abs=1e-4)
+
+
+@pytest.mark.parametrize("case", ["eps0", "eps_m3"])
+@pytest.mark.parametrize("fl", ["up", "down"])
+def test_reproduces_reference_greens_function_and_self_energy(case, fl, tmp_path):
+    input_data = _build_input(case, tmp_path)
+    ref = FIXTURE[case]["reference_gf_se"][fl]
+
+    solver = Solver(input_data)
+    solver.solve()
+
+    ref_GF_R = np.array(ref["GF_R_re"]) + 1j * np.array(ref["GF_R_im"])
+    ref_GF_K = np.array(ref["GF_K_re"]) + 1j * np.array(ref["GF_K_im"])
+    ref_SE_R = np.array(ref["SE_R_re"]) + 1j * np.array(ref["SE_R_im"])
+    ref_SE_K = np.array(ref["SE_K_re"]) + 1j * np.array(ref["SE_K_im"])
+
+    np.testing.assert_allclose(solver.GF[fl].R, ref_GF_R, atol=1e-6)
+    np.testing.assert_allclose(solver.GF[fl].K, ref_GF_K, atol=1e-6)
+    np.testing.assert_allclose(solver.SE[fl].R, ref_SE_R, atol=1e-6)
+    np.testing.assert_allclose(solver.SE[fl].K, ref_SE_K, atol=1e-6)
+
+
+def test_recalculated_n_double_matches_original_in_equilibrium():
+    """
+    In equilibrium, the exact Keldysh Galitskii-Migdal expression (Eq. 3) and
+    the equilibrium-FDT approximation historically used to produce the
+    original 'N_double' field coincide, since G and Sigma then share a common
+    distribution function. Confirms the fixture-building recalculation
+    (scripts/build_reference_fixtures.py) didn't silently change these
+    equilibrium reference values.
+    """
+    for case in ("eps0", "eps_m3"):
+        expected = FIXTURE[case]["expected"]
+        assert expected["n_double"] == pytest.approx(expected["n_double_stored_original"], abs=1e-8)
 
 
 def test_eps0_case_is_spin_symmetric():
