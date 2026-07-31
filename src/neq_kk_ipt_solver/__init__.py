@@ -1,5 +1,7 @@
 """
 neq_kk_ipt_solver: a nonequilibrium Kajueter-Kotliar IPT impurity solver.
+
+Author: Tommaso Maria Mazzocchi
 """
 from .solver import Solver
 from .utils import Keldysh, fermi, KK

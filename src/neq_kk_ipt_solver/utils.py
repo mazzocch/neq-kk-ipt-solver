@@ -4,8 +4,10 @@ function, a Kramers-Kronig (Hilbert-transform) helper, JSON-schema-backed
 global-parameter loading, and a small git-provenance helper for output
 metadata.
 
-Trimmed from the parent multiorbital_ipt project's utils.py down to exactly
+Trimmed from the parent project's utils.py down to exactly
 what neq_kk_ipt_solver.solver.Solver uses.
+
+Author: Tommaso Maria Mazzocchi
 """
 import json
 import os
@@ -23,7 +25,7 @@ class Keldysh:
     """
     Container for a Green's-function-like object in the Keldysh formalism:
     retarded (R) and Keldysh (K) components, plus the derived spectral
-    function (A), distribution function (F), and occupation density (N).
+    function (A), (generalized) distribution function (F), and occupation density (N).
     """
     R: np.ndarray | None = None
     K: np.ndarray | None = None
@@ -51,7 +53,9 @@ class Keldysh:
 
 
 def fermi(w: np.ndarray, mu: float, T: float) -> np.ndarray:
-    """Fermi-Dirac distribution, guarded against exponential overflow/underflow."""
+    """
+    Fermi-Dirac distribution, guarded against exponential overflow/underflow.
+    """
     if T < 1e-10:
         return np.heaviside(mu - w, 0.5)
 

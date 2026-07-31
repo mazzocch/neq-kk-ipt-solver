@@ -28,9 +28,14 @@ Keldysh analogue of the Potthoff-Wegner-Nolting m=3 moment band-shift term
 
 ## Installation
 
+Recommended: install into a dedicated virtual environment, so this
+project's dependencies stay isolated from anything else on your machine.
+
 ```bash
 git clone https://github.com/mazzocch/neq-kk-ipt-solver.git
 cd neq-kk-ipt-solver
+python3 -m venv .venv
+source .venv/bin/activate    # on Windows: .venv\Scripts\activate
 pip install .
 ```
 
@@ -40,6 +45,10 @@ For development (editable install + running the tests):
 pip install -e ".[test]"
 pytest
 ```
+
+(If you're using an editor with a Python language server -- e.g. VS Code
+with Pylance -- point it at `.venv`'s interpreter, or imports like `numpy`
+will show as unresolved even though everything installed correctly.)
 
 ## Quickstart
 

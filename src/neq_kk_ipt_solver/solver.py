@@ -1,12 +1,13 @@
 """
 Nonequilibrium Kajueter-Kotliar Iterated Perturbation Theory (IPT) impurity
 solver, extended to arbitrary filling and to genuine nonequilibrium (Keldysh)
-steady states, with an optional Potthoff-Wegner-Nolting (Phys. Rev. B 55,
-16132 (1997)) m=3 moment band-shift correction.
+steady states, with an optional Potthoff-Wegner-Nolting [Phys. Rev. B 55,
+16132 (1997)] m=3 moment band-shift correction.
 
-Physics background and validation: see the accompanying papers referenced in
-the README (Mazzocchi, Werner, Aichhorn, Arrigoni, Phys. Rev. B 112, 155127
-(2025); and the nonequilibrium IPT extension referenced therein).
+Physics background and validation: see preprint on the nonequilibrium
+IPT extension referenced in the README [https://doi.org/10.48550/arXiv.2604.15942].
+
+Author: Tommaso Maria Mazzocchi
 """
 
 import json
