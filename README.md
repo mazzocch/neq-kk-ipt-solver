@@ -11,6 +11,23 @@ The preprint is currenly undergoing peer review in Phys. Rev. B and the DOI
 will be updated as soon as the manuscript gets published in the journal.
 The full dataset is available at: https://repository.tugraz.at/records/xz6v9-9jp08.
 
+## Citing this code
+
+This solver is released under the MIT license because we believe in open
+science: the code should be freely available for anyone to inspect, use,
+reuse, and build on, with no strings attached.
+
+That said, if this solver is useful to your own work, we would be very
+pleased — and would greatly appreciate — a citation of the paper it was
+originally written for:
+
+> T. M. Mazzocchi and E. Arrigoni, "Extension of the iterated perturbation
+> theory at arbitrary fillings to nonequilibrium steady states",
+> arXiv:2604.15942 (2026).
+> https://doi.org/10.48550/arXiv.2604.15942
+
+This preprint is currently under peer review in Phys. Rev. B; the reference
+above will be updated to the published journal version once it is available.
 
 ## Physics background
 
@@ -211,24 +228,6 @@ two impurity levels) and genuine nonequilibrium, voltage-biased (U=4,
 T=0.1175, V=1.0, two impurity levels) regimes -- benchmarking the full
 Green's function and self-energy (both flavors), not just the scalar
 occupations and double occupancy.
-
-## Citing this code
-
-This solver is released under the MIT license because we believe in open
-science: the code should be freely available for anyone to inspect, use,
-reuse, and build on, with no strings attached.
-
-That said, if this solver is useful to your own work, we would be very
-pleased — and would greatly appreciate — a citation of the paper it was
-originally written for:
-
-> T. M. Mazzocchi and E. Arrigoni, "Extension of the iterated perturbation
-> theory at arbitrary fillings to nonequilibrium steady states",
-> arXiv:2604.15942 (2026).
-> https://doi.org/10.48550/arXiv.2604.15942
-
-This preprint is currently under peer review in Phys. Rev. B; the reference
-above will be updated to the published journal version once it is available.
 
 ## License
 
