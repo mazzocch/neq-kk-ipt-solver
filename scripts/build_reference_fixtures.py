@@ -1,9 +1,18 @@
 """
-Rebuilds tests/data/*.json reference fixtures from the original IPT
-solver_output files in the electric_field_hypercubic sister project,
+Rebuilds the tests/data/*.json + *.npz reference fixtures from the original
+IPT solver_output files in the electric_field_hypercubic sister project,
 including the full Green's function and self-energy arrays (not just scalar
 occupations) so the physics regression tests can benchmark full spectral
 data, not only a handful of observables.
+
+Numeric arrays (hybridization, GF, SE) are stored in a companion compressed
+.npz file rather than inline in the JSON: JSON text-encodes floats at ~20+
+bytes each with no compression, whereas np.savez_compressed stores them as
+raw (gzip-compressed) binary, which shrunk these two fixtures from ~25MB
+combined down to a small fraction of that at full, unchanged resolution
+(N_points=10001, both flavors, no downsampling). The JSON files keep only
+small scalar/metadata (global_parameters, onsite energies, expected
+occupations/double-occupancy, provenance).
 
 Also recomputes n_double from those raw GF/SE arrays via the EXACT Keldysh
 Galitskii-Migdal expression (Eq. 3 of the attached PDF excerpt, same formula
@@ -57,19 +66,17 @@ def recompute_n_double(results: dict, U: float, fl0: str = "up") -> float:
     return float(np.real(-1j / (2 * np.pi * U) * np.trapezoid(integrand, w)))
 
 
-def gf_se_block(results: dict, fl: str) -> dict:
+def gf_se_arrays(results: dict, fl: str, prefix: str, npz_arrays: dict) -> None:
     r = results[fl]
-    return {
-        "GF_R_re": r["GF_R_re"], "GF_R_im": r["GF_R_im"],
-        "GF_K_re": r["GF_K_re"], "GF_K_im": r["GF_K_im"],
-        "SE_R_re": r["SE_R_re"], "SE_R_im": r["SE_R_im"],
-        "SE_K_re": r["SE_K_re"], "SE_K_im": r["SE_K_im"],
-    }
+    for key in ("GF_R_re", "GF_R_im", "GF_K_re", "GF_K_im", "SE_R_re", "SE_R_im", "SE_K_re", "SE_K_im"):
+        npz_arrays[f"{prefix}_{key}"] = np.array(r[key])
 
 
-def build_equilibrium_fixture() -> dict:
-    fixture = {}
-    shared_delta = None
+def build_equilibrium_fixture() -> tuple[dict, dict]:
+    meta = {}
+    npz_arrays = {}
+    shared_delta_written = False
+
     for name, path in EQ_SOURCES.items():
         with open(path) as f:
             d = json.load(f)
@@ -80,18 +87,23 @@ def build_equilibrium_fixture() -> dict:
         r = d["results"]
         U = gp["U"]
 
-        if shared_delta is None:
-            shared_delta = {"Delta_R_im": dyn["Delta_R_im"], "Delta_K_im": dyn["Delta_K_im"]}
+        if not shared_delta_written:
+            for fl in ("up", "down"):
+                npz_arrays[f"hyb_Delta_R_im_{fl}"] = np.array(dyn["Delta_R_im"][fl])
+                npz_arrays[f"hyb_Delta_K_im_{fl}"] = np.array(dyn["Delta_K_im"][fl])
+            shared_delta_written = True
 
         n_double_recalc = recompute_n_double(r, U)
         stored = r["N_double"]
         print(f"[equilibrium/{name}] stored N_double={stored:.6f}, "
               f"recalculated (Eq.3)={n_double_recalc:.6f}, diff={abs(stored - n_double_recalc):.3e}")
 
-        fixture[name] = {
+        for fl in ("up", "down"):
+            gf_se_arrays(r, fl, f"{name}_{fl}", npz_arrays)
+
+        meta[name] = {
             "global_parameters": gp,
             "impurity_onsite_e": onsite,
-            "reference_gf_se": {fl: gf_se_block(r, fl) for fl in ("up", "down")},
             "expected": {
                 "n_occ_up": r["up"]["n_occ"],
                 "n_occ_down": r["down"]["n_occ"],
@@ -100,18 +112,20 @@ def build_equilibrium_fixture() -> dict:
             },
         }
 
-    fixture["shared_hybridization"] = shared_delta
-    fixture["source"] = (
+    meta["source"] = (
         "electric_field_hypercubic/preliminary_tests/march12 (single-band IPT, T=0.05, "
         "U=5.5, Bethe-lattice-like hybridization, two impurity levels eps=0 and eps=-3). "
         "n_double recomputed from the raw GF/SE arrays via the exact Keldysh "
-        "Galitskii-Migdal expression, not taken from the stored 'N_double' field."
+        "Galitskii-Migdal expression, not taken from the stored 'N_double' field. "
+        "Hybridization and GF/SE arrays are in the companion .npz file."
     )
-    return fixture
+    return meta, npz_arrays
 
 
-def build_nonequilibrium_fixture() -> dict:
-    fixture = {}
+def build_nonequilibrium_fixture() -> tuple[dict, dict]:
+    meta = {}
+    npz_arrays = {}
+
     for name, path in NEQ_SOURCES.items():
         with open(path) as f:
             d = json.load(f)
@@ -127,11 +141,14 @@ def build_nonequilibrium_fixture() -> dict:
         print(f"[nonequilibrium/{name}] stored N_double={stored:.6f}, "
               f"recalculated (Eq.3)={n_double_recalc:.6f}, diff={abs(stored - n_double_recalc):.3e}")
 
-        fixture[name] = {
+        for fl in ("up", "down"):
+            npz_arrays[f"{name}_hyb_Delta_R_im_{fl}"] = np.array(dyn["Delta_R_im"][fl])
+            npz_arrays[f"{name}_hyb_Delta_K_im_{fl}"] = np.array(dyn["Delta_K_im"][fl])
+            gf_se_arrays(r, fl, f"{name}_{fl}", npz_arrays)
+
+        meta[name] = {
             "global_parameters": gp,
             "impurity_onsite_e": onsite,
-            "hybridization": {"Delta_R_im": dyn["Delta_R_im"], "Delta_K_im": dyn["Delta_K_im"]},
-            "reference_gf_se": {fl: gf_se_block(r, fl) for fl in ("up", "down")},
             "expected": {
                 "n_occ_up": r["up"]["n_occ"],
                 "n_occ_down": r["down"]["n_occ"],
@@ -140,30 +157,33 @@ def build_nonequilibrium_fixture() -> dict:
             },
         }
 
-    fixture["source"] = (
+    meta["source"] = (
         "electric_field_hypercubic/runs_kkipt_new (nonequilibrium single-band IPT, U=4, "
         "T=0.1175, voltage bias V=1.0, flat-DOS lead hybridization, two impurity levels "
         "eps=0 and eps=-2.25). n_double recomputed from the raw GF/SE arrays via the exact "
         "Keldysh Galitskii-Migdal expression, not taken from the stored 'N_double' field -- "
         "a very early version of this solver used an approximate formula (equal to the exact "
         "one only in equilibrium, via the fluctuation-dissipation theorem) that differs from "
-        "the exact one by ~6-7e-5 for these nonequilibrium (V=1.0) cases."
+        "the exact one by ~6-7e-5 for these nonequilibrium (V=1.0) cases. Hybridization and "
+        "GF/SE arrays are in the companion .npz file."
     )
-    return fixture
+    return meta, npz_arrays
 
 
 def main() -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
 
-    eq_fixture = build_equilibrium_fixture()
+    eq_meta, eq_arrays = build_equilibrium_fixture()
     with open(os.path.join(DATA_DIR, "aim_T0p05_U5p5_reference.json"), "w") as f:
-        json.dump(eq_fixture, f, indent=2)
+        json.dump(eq_meta, f, indent=2)
+    np.savez_compressed(os.path.join(DATA_DIR, "aim_T0p05_U5p5_reference.npz"), **eq_arrays)
 
-    neq_fixture = build_nonequilibrium_fixture()
+    neq_meta, neq_arrays = build_nonequilibrium_fixture()
     with open(os.path.join(DATA_DIR, "aim_U4_T0p1175_V1_nonequilibrium_reference.json"), "w") as f:
-        json.dump(neq_fixture, f, indent=2)
+        json.dump(neq_meta, f, indent=2)
+    np.savez_compressed(os.path.join(DATA_DIR, "aim_U4_T0p1175_V1_nonequilibrium_reference.npz"), **neq_arrays)
 
-    print("\nWrote both fixture files.")
+    print("\nWrote both fixture (.json metadata + .npz arrays) file pairs.")
 
 
 if __name__ == "__main__":

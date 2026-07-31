@@ -34,15 +34,17 @@ import pytest
 from neq_kk_ipt_solver import Solver
 
 HERE = os.path.dirname(__file__)
-FIXTURE_PATH = os.path.join(HERE, "data", "aim_U4_T0p1175_V1_nonequilibrium_reference.json")
+FIXTURE_JSON_PATH = os.path.join(HERE, "data", "aim_U4_T0p1175_V1_nonequilibrium_reference.json")
+FIXTURE_NPZ_PATH = os.path.join(HERE, "data", "aim_U4_T0p1175_V1_nonequilibrium_reference.npz")
 
-with open(FIXTURE_PATH) as f:
+with open(FIXTURE_JSON_PATH) as f:
     FIXTURE = json.load(f)
+
+ARRAYS = np.load(FIXTURE_NPZ_PATH)
 
 
 def _build_input(case: str, tmp_path) -> dict:
     case_data = FIXTURE[case]
-    hyb = case_data["hybridization"]
 
     global_parameters = {k: v for k, v in case_data["global_parameters"].items() if k != "T"}
 
@@ -54,8 +56,14 @@ def _build_input(case: str, tmp_path) -> dict:
                 "impurity_onsite_e": case_data["impurity_onsite_e"],
             },
             "dynamic": {
-                "Delta_R_im": hyb["Delta_R_im"],
-                "Delta_K_im": hyb["Delta_K_im"],
+                "Delta_R_im": {
+                    "up": ARRAYS[f"{case}_hyb_Delta_R_im_up"].tolist(),
+                    "down": ARRAYS[f"{case}_hyb_Delta_R_im_down"].tolist(),
+                },
+                "Delta_K_im": {
+                    "up": ARRAYS[f"{case}_hyb_Delta_K_im_up"].tolist(),
+                    "down": ARRAYS[f"{case}_hyb_Delta_K_im_down"].tolist(),
+                },
                 "output_dir": str(tmp_path),
             },
         },
@@ -81,15 +89,15 @@ def test_reproduces_nonequilibrium_reference_occupations(case, tmp_path):
 @pytest.mark.parametrize("fl", ["up", "down"])
 def test_reproduces_nonequilibrium_reference_greens_function_and_self_energy(case, fl, tmp_path):
     input_data = _build_input(case, tmp_path)
-    ref = FIXTURE[case]["reference_gf_se"][fl]
+    prefix = f"{case}_{fl}"
 
     solver = Solver(input_data)
     solver.solve()
 
-    ref_GF_R = np.array(ref["GF_R_re"]) + 1j * np.array(ref["GF_R_im"])
-    ref_GF_K = np.array(ref["GF_K_re"]) + 1j * np.array(ref["GF_K_im"])
-    ref_SE_R = np.array(ref["SE_R_re"]) + 1j * np.array(ref["SE_R_im"])
-    ref_SE_K = np.array(ref["SE_K_re"]) + 1j * np.array(ref["SE_K_im"])
+    ref_GF_R = ARRAYS[f"{prefix}_GF_R_re"] + 1j * ARRAYS[f"{prefix}_GF_R_im"]
+    ref_GF_K = ARRAYS[f"{prefix}_GF_K_re"] + 1j * ARRAYS[f"{prefix}_GF_K_im"]
+    ref_SE_R = ARRAYS[f"{prefix}_SE_R_re"] + 1j * ARRAYS[f"{prefix}_SE_R_im"]
+    ref_SE_K = ARRAYS[f"{prefix}_SE_K_re"] + 1j * ARRAYS[f"{prefix}_SE_K_im"]
 
     np.testing.assert_allclose(solver.GF[fl].R, ref_GF_R, atol=1e-6)
     np.testing.assert_allclose(solver.GF[fl].K, ref_GF_K, atol=1e-6)
