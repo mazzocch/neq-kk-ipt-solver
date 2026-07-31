@@ -15,22 +15,26 @@ small scalar/metadata (global_parameters, onsite energies, expected
 occupations/double-occupancy, provenance).
 
 Also recomputes n_double from those raw GF/SE arrays via the EXACT Keldysh
-Galitskii-Migdal expression (Eq. 3 of the attached PDF excerpt, same formula
-already implemented in neq_kk_ipt_solver.solver.Solver.calc_occupations()):
+Galitskii-Migdal expression (the same formula already implemented in
+neq_kk_ipt_solver.solver.Solver.calc_occupations()):
 
     n_d = -i/(2*pi*U) * integral dw [Sigma^R(w) G^<(w) + Sigma^<(w) G^A(w)]
     X^< = X^K/2 - i*Im(X^R),  G^A = (G^R)^*
 
 rather than trusting the "N_double" field already stored in those files,
-since a very early version of this solver used an approximate formula
-(Eq. 2 of the same excerpt) that coincides with Eq. 3 only in equilibrium
-(via the fluctuation-dissipation theorem) but not away from it. Comparing
-the two below confirms exactly that: equilibrium matches to ~1e-14/1e-16,
+since a very early version of this solver used an approximate formula that
+coincides with this exact one only in equilibrium (via the
+fluctuation-dissipation theorem) but not away from it. Comparing the two
+below confirms exactly that: equilibrium matches to ~1e-14/1e-16,
 nonequilibrium (V=1.0) differs by ~6-7e-5.
 
 Not part of the installed package; a one-off fixture-generation script, run
 once and not re-run automatically (the corrected reference values are then
 simply committed as data).
+
+Requires the SOURCE_DATA_ROOT environment variable to point at a local
+checkout of the (private, unpublished) source-data project -- not committed
+here, since the actual path is local-machine-specific.
 """
 import json
 import os
@@ -40,14 +44,21 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(HERE, "..", "tests", "data")
 
+SOURCE_DATA_ROOT = os.environ.get("SOURCE_DATA_ROOT")
+if not SOURCE_DATA_ROOT:
+    raise SystemExit(
+        "Set the SOURCE_DATA_ROOT environment variable to the local path of "
+        "the private source-data project before running this script."
+    )
+
 EQ_SOURCES = {
-    "eps0": "/Users/tommasomariamazzocchi/Desktop/projects/electric_field_hypercubic/preliminary_tests/march12/aim_T0p05_U5p5_eps0/solver_output_2026-03-12T15:58:31.json",
-    "eps_m3": "/Users/tommasomariamazzocchi/Desktop/projects/electric_field_hypercubic/preliminary_tests/march12/aim_T0p05_U5p5_eps_m3/solver_output_2026-03-12T16:02:09.json",
+    "eps0": os.path.join(SOURCE_DATA_ROOT, "preliminary_tests/march12/aim_T0p05_U5p5_eps0/solver_output_2026-03-12T15:58:31.json"),
+    "eps_m3": os.path.join(SOURCE_DATA_ROOT, "preliminary_tests/march12/aim_T0p05_U5p5_eps_m3/solver_output_2026-03-12T16:02:09.json"),
 }
 
 NEQ_SOURCES = {
-    "eps0": "/Users/tommasomariamazzocchi/Desktop/projects/electric_field_hypercubic/runs_kkipt_new/U4_T0p1175_eps0_ipt/solver_out_V1.000000/solver_output_2026-03-19T21:31:08.json",
-    "eps_m2p25": "/Users/tommasomariamazzocchi/Desktop/projects/electric_field_hypercubic/runs_kkipt_new/U4_T0p1175_eps_m2p25_ipt/solver_out_V1.000000/solver_output_2026-03-20T08:50:43.json",
+    "eps0": os.path.join(SOURCE_DATA_ROOT, "runs_kkipt_new/U4_T0p1175_eps0_ipt/solver_out_V1.000000/solver_output_2026-03-19T21:31:08.json"),
+    "eps_m2p25": os.path.join(SOURCE_DATA_ROOT, "runs_kkipt_new/U4_T0p1175_eps_m2p25_ipt/solver_out_V1.000000/solver_output_2026-03-20T08:50:43.json"),
 }
 
 
