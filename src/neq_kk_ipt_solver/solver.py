@@ -382,9 +382,12 @@ class Solver:
         to the modified IPT scheme in Phys. Rev. Lett. 77 131 (1996).
         It assumes the auxiliary potential 'mu0' has been passed correctly,
         i.e. it corresponds to the current flavor 'fl' handled in this function.
+
+        Written as the literal Dyson equation G0 = (G0^-1)^-1, with
+        G0^-1 = (w + mu0) - Delta (Delta plays the role of a self-energy here).
         """
-        self.G0[fl].R = 1 / (self.w + mu0 - self.Delta[fl].R)
-        self.G0[fl].K = self.Delta[fl].K * abs(self.G0[fl].R) ** 2
+        G0_inv = Keldysh(R=self.w + mu0, K=0) - self.Delta[fl]
+        self.G0[fl] = G0_inv.inverse()
 
         self.G0[fl].calc_spectrum()
         self.G0[fl].calc_distribution()
@@ -483,9 +486,15 @@ class Solver:
         Given the auxiliary chemical potential 'mu0' and flavor 'fl'
         computes the interacting impurity Green's function (GF) from Weiss field (G0)
         and electronic self-energy (SE) for the corresponding flavor.
+
+        Written as the literal Dyson equation G = (G0^-1 - shift - Sigma)^-1,
+        where 'shift' (mu0 + impurity_onsite_e) is the auxiliary-potential
+        correction that must be subtracted back out of G0's own inverse
+        (see calc_G0's docstring).
         """
-        self.GF[fl].R = 1 / (1 / self.G0[fl].R - mu0 - self.impurity_onsite_e[fl] - self.SE[fl].R)
-        self.GF[fl].K = (self.G0[fl].K / abs(self.G0[fl].R) ** 2 + self.SE[fl].K) * abs(self.GF[fl].R) ** 2
+        shift = mu0 + self.impurity_onsite_e[fl]
+        GF_inv = self.G0[fl].inverse() - shift - self.SE[fl]
+        self.GF[fl] = GF_inv.inverse()
 
         self.GF[fl].calc_spectrum()
         self.GF[fl].calc_distribution()

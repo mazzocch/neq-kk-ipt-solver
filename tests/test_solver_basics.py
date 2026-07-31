@@ -29,6 +29,54 @@ def test_keldysh_missing_R_raises():
         g.calc_spectrum()
 
 
+def test_keldysh_inverse_is_involution():
+    """
+    x.inverse().inverse() must reproduce x exactly: the Keldysh-space matrix
+    inverse (R_inv=1/R, K_inv=-K/|R|^2) is a genuine involution, independent
+    of any specific physics -- a real correctness check on the formula itself.
+    """
+    w = np.linspace(-10, 10, 501)
+    R = 1 / (w + 1j * 0.7 - 0.3)
+    K = 2j * np.imag(R) * (1 - 2 * fermi(w, 0.2, 0.15))
+
+    g = Keldysh(R=R, K=K)
+    g_back = g.inverse().inverse()
+
+    np.testing.assert_allclose(g_back.R, g.R, rtol=1e-10)
+    np.testing.assert_allclose(g_back.K, g.K, rtol=1e-10)
+
+
+def test_keldysh_inverse_matches_direct_formula():
+    w = np.linspace(-10, 10, 501)
+    R = 1 / (w + 1j * 0.7 - 0.3)
+    K = 2j * np.imag(R) * (1 - 2 * fermi(w, 0.2, 0.15))
+    g = Keldysh(R=R, K=K)
+
+    g_inv = g.inverse()
+
+    np.testing.assert_allclose(g_inv.R, 1 / R, rtol=1e-12)
+    np.testing.assert_allclose(g_inv.K, -K / np.abs(R) ** 2, rtol=1e-12)
+
+
+def test_keldysh_sub_keldysh_is_componentwise():
+    a = Keldysh(R=np.array([1.0 + 1j, 2.0]), K=np.array([3.0j, 4.0j]))
+    b = Keldysh(R=np.array([0.5, 0.5j]), K=np.array([1.0j, 1.0j]))
+
+    c = a - b
+
+    np.testing.assert_allclose(c.R, a.R - b.R)
+    np.testing.assert_allclose(c.K, a.K - b.K)
+
+
+def test_keldysh_sub_scalar_only_affects_R():
+    a = Keldysh(R=np.array([1.0 + 1j, 2.0]), K=np.array([3.0j, 4.0j]))
+
+    c = a - 0.5
+
+    np.testing.assert_allclose(c.R, a.R - 0.5)
+    np.testing.assert_allclose(c.K, a.K)
+
+
 def test_fermi_zero_temperature_is_step_function():
     w = np.array([-1.0, -0.001, 0.001, 1.0])
     f = fermi(w, mu=0.0, T=1e-12)

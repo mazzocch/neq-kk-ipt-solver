@@ -51,6 +51,36 @@ class Keldysh:
         else:
             raise ValueError("Attributes 'R' or 'K' in Keldysh class are 'None': cannot compute occupation function.")
 
+    def inverse(self) -> "Keldysh":
+        """
+        Keldysh-space matrix inverse of this (local, scalar) retarded/Keldysh
+        pair. Writing the object as the upper-triangular Keldysh matrix
+        [[R, K], [0, A]] with A = R^*, its inverse works out to
+
+            R_inv = 1 / R
+            K_inv = -K / |R|^2
+
+        This is a genuine involution: x.inverse().inverse() reproduces x
+        exactly (see test_keldysh_inverse_is_involution).
+
+        Writing a Dyson equation as G = (G0.inverse() - shift - Sigma).inverse()
+        is the literal textbook G = (G0^-1 - Sigma)^-1, e.g. in calc_G0/calc_GF.
+        """
+        R_inv = 1 / self.R
+        K_inv = -self.K / np.abs(self.R) ** 2
+        return Keldysh(R=R_inv, K=K_inv)
+
+    def __sub__(self, other) -> "Keldysh":
+        """
+        Keldysh - Keldysh: componentwise (R-R, K-K).
+        Keldysh - scalar/array: subtracted from R only, K untouched -- a
+        real energy shift (e.g. a chemical potential) has no Keldysh
+        component of its own.
+        """
+        if isinstance(other, Keldysh):
+            return Keldysh(R=self.R - other.R, K=self.K - other.K)
+        return Keldysh(R=self.R - other, K=self.K)
+
 
 def fermi(w: np.ndarray, mu: float, T: float) -> np.ndarray:
     """
