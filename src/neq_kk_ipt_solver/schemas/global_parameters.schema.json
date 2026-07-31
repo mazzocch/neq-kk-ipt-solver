@@ -21,18 +21,6 @@
             },
             "description": "Contains the flavors. So far only implemented for 'up' and 'down'."
         },
-        "J": {
-            "type": "number",
-            "description": "Hund's coupling in the Hubbard-Kanamori Hamiltonian (rotational-invariant systems)."
-        },
-        "Up": {
-            "type": "number",
-            "description": "Inter-orbital interaction among opposite spins in the Hubbard-Kanamori Hamiltonian."
-        },
-        "Upp": {
-            "type": "number",
-            "description": "Inter-orbital interaction among same spins in the Hubbard-Kanamori Hamiltonian."
-        },
         "strict": {
             "type": "boolean",
             "description": "Raises an error if a json validation fails. Default is 'False'."

@@ -95,7 +95,6 @@ solver.store_output()  # writes ./out/solver_output_<timestamp>.json
 | `U` | number | yes | Hubbard interaction strength. |
 | `flavors` | array of strings | yes | The two spin flavors, e.g. `["up", "down"]`. Exactly 2 are required. |
 | `strict` | boolean | no | If `true`, raises on JSON-schema validation failure instead of warning. Default `false`. |
-| `J`, `Up`, `Upp` | number | no | Accepted for schema compatibility with the parent multiorbital project (Hund's coupling / inter-orbital Kanamori terms), but **not used** by this single-band solver. |
 
 ### `solver.static`
 
