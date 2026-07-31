@@ -699,11 +699,6 @@ class Solver:
             n_d = -i/(2*pi*U) * integral dw [Sigma^R(w) G^<(w) + Sigma^<(w) G^A(w)]
 
         with X^< = X^K/2 - i*Im(X^R) and G^A = (G^R)^*, Sigma^A = (Sigma^R)^*.
-        The previous formula, n_d = -1/(pi*U) * integral dw F(w) Im[Sigma^R(w) G^R(w)]
-        with F = (1/2)(1 - Im(G^K)/(2 Im(G^R))), is only an approximation to
-        this: it assumes Sigma and G share a common distribution function via
-        the fluctuation-dissipation theorem, which holds at equilibrium but
-        not in general out of equilibrium.
         """
         for fl in self.flavors:
             self.n_occ[fl] = np.trapezoid(self.GF[fl].N, self.w)
