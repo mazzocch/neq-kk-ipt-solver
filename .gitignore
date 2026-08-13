@@ -9,3 +9,6 @@ venv/
 .DS_Store
 *.json.out
 output/
+results/
+texput.log
+research/
