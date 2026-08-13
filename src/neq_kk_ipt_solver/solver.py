@@ -298,10 +298,14 @@ class Solver:
         """
         Builds the hybridization function Delta, in order of precedence:
           1. explicit 'Delta_R_im'/'Delta_K_im' arrays (fully general, per flavor);
-          2. a Lorentzian of center 'Delta_center' and width 'Delta_gamma', each of
-             which may be a single number (spin-symmetric/degenerate hybridization,
-             shared by both flavors) or a per-flavor dict (spin-dependent hybridization);
-          3. the flat-DOS fallback built from 'T_fict', 'D_l', 'D_r', 't_l', 't_r'.
+          2. a semi-elliptic ("semicircular") band of half-bandwidth 'Delta_D'
+             centered on 'Delta_center' (both required, as for the Lorentzian);
+          3. a Lorentzian of center 'Delta_center' and width 'Delta_gamma';
+          4. the flat-DOS fallback built from 'T_fict', 'D_l', 'D_r', 't_l', 't_r'.
+
+        For 2. and 3., each shape parameter may be a single number
+        (spin-symmetric/degenerate hybridization, shared by both flavors) or a
+        per-flavor dict (spin-dependent hybridization).
         """
         try:
             flat_DOS = False
@@ -309,14 +313,92 @@ class Solver:
         except Exception:
             flat_DOS = True
 
+        semicircular_hyb = False
         lorentzian_hyb = False
         if flat_DOS:
+            semicircular_hyb = hasattr(self, "Delta_D")
             try:
                 _ = self.Delta_center
                 _ = self.Delta_gamma
                 lorentzian_hyb = True
             except Exception:
                 lorentzian_hyb = False
+
+        if semicircular_hyb and lorentzian_hyb:
+            raise ValueError(
+                "ERROR: Ambiguous hybridization request -- 'Delta_D' (semicircular) and "
+                "'Delta_gamma' (Lorentzian) were both given. Provide exactly one."
+            )
+
+        if semicircular_hyb:
+            print(
+                "Semicircular hybridization requested via 'Delta_D'. Pass a single number "
+                "for a spin-symmetric (degenerate) hybridization, or a per-flavor dict for "
+                "a spin-dependent one."
+            )
+
+            # Same normalization convention as the Lorentzian branch below: unit
+            # total spectral weight, i.e. -(1/pi) int dw Im Delta^R = 1, with the
+            # shape parameter setting the width. The peak hybridization strength
+            # is then Gamma = -Im Delta^R(center) = 2 / Delta_D, so a semicircle
+            # matching a given Gamma needs Delta_D = 2/Gamma. For an arbitrary
+            # normalization, supply 'Delta_R_im'/'Delta_K_im' directly instead.
+            if not hasattr(self, "Delta_center"):
+                raise ValueError(
+                    "ERROR: The semicircular hybridization requires 'Delta_center' alongside "
+                    "'Delta_D' (pass 0 for a band centered on zero), just as the Lorentzian "
+                    "requires 'Delta_center' alongside 'Delta_gamma'."
+                )
+
+            centers = self._as_flavor_dict(self.Delta_center, "Delta_center")
+            half_bandwidths = self._as_flavor_dict(self.Delta_D, "Delta_D")
+            etas = self._as_flavor_dict(getattr(self, "Delta_eta", 0.0), "Delta_eta")
+
+            mu_l = self.mu + self.V / 2
+            mu_r = self.mu - self.V / 2
+
+            for fl in self.flavors:
+                D = half_bandwidths[fl]
+                if D <= 1e-14:
+                    raise ValueError(f"ERROR: 'Delta_D' for flavor '{fl}' must be positive.")
+
+                eta = etas[fl]
+                if eta < 0.0:
+                    raise ValueError(
+                        f"ERROR: 'Delta_eta' for flavor '{fl}' must be non-negative "
+                        "(it is subtracted from Im Delta^R, which causality requires to be <= 0)."
+                    )
+
+                x = self.w - centers[fl]
+                inside = np.abs(x) <= D
+
+                Delta_R_im = np.zeros_like(self.w)
+                Delta_R_im[inside] = -(2.0 / D ** 2) * np.sqrt(D ** 2 - x[inside] ** 2)
+
+                # Optional constant broadening. A bare semicircle has Im Delta^R
+                # exactly zero outside the band, so any impurity feature landing
+                # there (typically a Hubbard band, once U is comparable to the
+                # bandwidth) becomes a true bound state -- a delta function the
+                # frequency grid cannot represent, which silently loses spectral
+                # weight and breaks the sum rules. Subtracting a small constant
+                # gives those states a finite, resolvable width.
+                #
+                # It is not free: the floor is a weak flat band spanning the whole
+                # grid, so it adds 2 * w_max * eta / pi to the hybridization weight
+                # D_1 (0.19 for eta=0.01 at w_max=30, i.e. ~19% on top of the
+                # semicircle's own unit weight) and makes D_1 depend on w_max.
+                # D_2 is unaffected, the floor being symmetric. Both are integrated
+                # from the actual Delta, so the sum rules stay exact either way --
+                # what changes is the model, not its consistency. Default 0.
+                Delta_R_im -= eta
+
+                Delta_R, _ = KK(self.w, Delta_R_im)
+                Delta_K = 2j * np.imag(Delta_R) * (1 - fermi(self.w, mu_l, self.T) - fermi(self.w, mu_r, self.T))
+
+                self.Delta[fl].R = Delta_R
+                self.Delta[fl].K = Delta_K
+
+            return
 
         if lorentzian_hyb:
             print(
