@@ -32,6 +32,22 @@
                 "band_shift_tol": {
                     "type": "number",
                     "description": "Convergence tolerance (max |dB_tilde|) for the inner B_tilde fixed-point iteration. Default is 1e-8."
+                },
+                "max_restarts": {
+                    "type": "integer",
+                    "description": "Number of additional starting points tried if the coupled root solve fails. 0 disables restarts. Default 5."
+                },
+                "on_convergence_failure": {
+                    "type": "string",
+                    "enum": [
+                        "raise",
+                        "warn"
+                    ],
+                    "description": "What to do when no attempt converges. 'raise' (default) reports the failure and raises ConvergenceError, so a non-solution cannot propagate into an outer loop; 'warn' only prints and returns the non-converged result."
+                },
+                "residual_tol": {
+                    "type": "number",
+                    "description": "Acceptance tolerance on |residual| of the coupled system. An attempt counts as converged only if its residual norm falls below this, regardless of what the optimizer's own success flag says (Levenberg-Marquardt in particular can report success far from a root). Default 1e-6."
                 }
             },
             "additionalProperties": false
@@ -111,10 +127,6 @@
                     ],
                     "description": "Width(s) of the Lorentzian hybridization, same single-number-vs-per-flavor-object convention as 'Delta_center'."
                 },
-                "output_dir": {
-                    "type": "string",
-                    "description": "Directory in which the results are stored."
-                },
                 "Delta_D": {
                     "oneOf": [
                         {
@@ -136,6 +148,10 @@
                         }
                     ],
                     "description": "Optional constant broadening subtracted from Im Delta^R of the semicircular hybridization, so it has no hard zeros outside the band and out-of-band bound states acquire a resolvable width. Non-negative; default 0. Same single-number-vs-per-flavor-object convention as 'Delta_center'. Adds 2*w_max*eta/pi to the hybridization weight D_1."
+                },
+                "output_dir": {
+                    "type": "string",
+                    "description": "Directory in which the results are stored."
                 }
             },
             "required": [

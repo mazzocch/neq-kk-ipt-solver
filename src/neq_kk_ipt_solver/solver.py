@@ -24,6 +24,19 @@ from scipy.optimize import root
 from .utils import Keldysh, set_global_parameters, KK, fermi, get_git_commit_hash
 
 
+class ConvergenceError(RuntimeError):
+    """
+    Raised when the coupled root solve fails on every restart attempt.
+
+    A non-converged solve leaves G, Sigma and the occupations at whatever point
+    the root-finder stopped at. Those are not a solution of the impurity
+    problem, and feeding them into an outer loop (e.g. DMFT) silently poisons
+    every subsequent iteration. Failing loudly is therefore the default; set
+    'on_convergence_failure' to 'warn' to get the old behaviour of returning the
+    non-converged result instead.
+    """
+
+
 class Solver:
 
     def __init__(self, input_data: dict) -> None:
@@ -46,6 +59,9 @@ class Solver:
             "band_shift_inner_maxiter": 30,
             "band_shift_mixing": 0.5,
             "band_shift_tol": 1e-8,
+            "max_restarts": 5,
+            "on_convergence_failure": "raise",
+            "residual_tol": 1e-6,
         }
 
         self.filename = f"solver_output_{formatted_now}.json"
@@ -104,6 +120,18 @@ class Solver:
         self.band_shift_error = 0.0
         self.band_shift_iterations = 0
         self.band_shift_diverged_count = 0
+
+        # Populated by solve(): how many starting points were tried and which
+        # one produced the returned solution.
+        self.solve_attempts = 0
+        self.solve_strategy = None
+        self.solve_residual = np.inf
+
+        if self.on_convergence_failure not in ("raise", "warn"):
+            raise ValueError(
+                "ERROR: 'on_convergence_failure' must be 'raise' or 'warn', got "
+                f"{self.on_convergence_failure!r}."
+            )
 
         if "dynamic" in input_data["solver"].keys():
             self._set_Delta()
@@ -236,6 +264,17 @@ class Solver:
         self.results["use_potthoff_band_shift"] = self.use_potthoff_band_shift
         self.results["band_shift_error"] = self.band_shift_error
         self.results["band_shift_iterations"] = self.band_shift_iterations
+
+        # Convergence provenance. Without this an output file gives no way to
+        # tell a solution from a non-converged point, which is exactly the
+        # failure mode the restart/raise machinery exists to prevent: a caller
+        # that catches ConvergenceError and stores anyway would otherwise write
+        # an unmarked, unusable result to disk.
+        self.results["converged"] = bool(self.solve_residual <= self.residual_tol)
+        self.results["residual_norm"] = float(self.solve_residual)
+        self.results["residual_tol"] = float(self.residual_tol)
+        self.results["solve_attempts"] = int(self.solve_attempts)
+        self.results["solve_strategy"] = self.solve_strategy
 
         input_params = deepcopy(self.input_data)
         input_params = {
@@ -796,10 +835,94 @@ class Solver:
         integrand = SE_R * GF_lt + SE_lt * GF_A
         self.n_double = np.real(-1j / (2 * np.pi * self.U) * np.trapezoid(integrand, self.w))
 
+    def _restart_strategies(self, x0_initial: np.ndarray) -> list:
+        """
+        Ordered fallback starting points, tried in turn when the first solve fails.
+
+        In practice the failures come from the root-finder wandering into
+        occupations pathologically close to 0 or 1, where the n(1-n) denominators
+        in the IPT coefficients (and in B_tilde) blow up. The ladder therefore
+        first spreads the starting occupations out, then offers a Weiss field
+        whose pole is aligned with the Hartree-shifted impurity level, then
+        switches algorithm to Levenberg-Marquardt, and finally jitters around the
+        original guess. The jitter is seeded, so the whole sequence is
+        reproducible.
+        """
+        fl_a, fl_b = self.flavors
+        zero_mu = {fl: 0.0 for fl in self.flavors}
+        half = {fl: 0.5 for fl in self.flavors}
+        _, n_initial = self._unpack_x(x0_initial)
+
+        def level_matched(n_all: dict) -> dict:
+            """
+            Auxiliary potential that puts the Weiss-field pole on the
+            Hartree-shifted impurity level. The Weiss field is
+            G0_s = 1/(w + mu0_s - Delta_s), so its pole sits at w = -mu0_s,
+            while the interacting level sits at eps_s + U n_sbar. Matching the
+            two gives mu0_s = -(eps_s + U n_sbar) -- note the OPPOSITE spin's
+            occupation, which is what the Hartree term carries.
+            """
+            return {
+                fl: -(self.impurity_onsite_e[fl] + self.U * n_all[self._other_flavor(fl)])
+                for fl in self.flavors
+            }
+
+        polarized_a = {fl_a: 0.75, fl_b: 0.25}
+        polarized_b = {fl_a: 0.25, fl_b: 0.75}
+
+        candidates = [
+            ("cold start (mu0=0, n=1/2)", self._pack_x(zero_mu, half), "hybr"),
+            # Keeps the incoming occupations but repairs mu0, for the common case
+            # of a guess whose n is plausible and whose auxiliary potential is not.
+            ("level-matched to the guess occupations",
+             self._pack_x(level_matched(n_initial), n_initial), "hybr"),
+            # Same construction at half filling; deduplicated against the cold
+            # start whenever eps = -U/2 makes the two coincide.
+            ("level-matched at half filling", self._pack_x(level_matched(half), half), "hybr"),
+            ("polarized towards " + fl_a,
+             self._pack_x(level_matched(polarized_a), polarized_a), "hybr"),
+            ("polarized towards " + fl_b,
+             self._pack_x(level_matched(polarized_b), polarized_b), "hybr"),
+            ("Levenberg-Marquardt from the initial guess", np.array(x0_initial, float), "lm"),
+        ]
+
+        rng = np.random.default_rng(0)
+        mu0_0, n_0 = self._unpack_x(x0_initial)
+        for k in range(4):
+            mu0_j = {fl: mu0_0[fl] + float(rng.normal(scale=0.5)) for fl in self.flavors}
+            n_j = {
+                fl: float(np.clip(n_0[fl] + rng.normal(scale=0.15), 0.05, 0.95))
+                for fl in self.flavors
+            }
+            candidates.append((f"jittered restart {k + 1}", self._pack_x(mu0_j, n_j), "hybr"))
+
+        # Drop duplicates, so no restart is wasted repeating a starting point
+        # that has already been tried. This matters in practice: at the
+        # particle-hole symmetric onsite energy the level-matched guess reduces
+        # to mu0 = 0 and would otherwise duplicate the cold start exactly.
+        # Duplication is only a problem within the same algorithm -- the same x
+        # is worth revisiting with Levenberg-Marquardt.
+        selected, seen = [], {"hybr": [np.asarray(x0_initial, float)]}
+        for label, x, method in candidates:
+            x = np.asarray(x, float)
+            if any(np.allclose(x, prev, atol=1e-12) for prev in seen.get(method, [])):
+                continue
+            seen.setdefault(method, []).append(x)
+            selected.append((label, x, method))
+        return selected
+
     def solve(self, *, maxfev: int = 1000, res_tol: float = 1e-8):
         """
         Solves the coupled four-dimensional nonlinear set of equations
         to find the vector (mu0_up, n_up, mu0_dn, n_dn).
+
+        If the root solve fails, up to 'max_restarts' further starting points are
+        tried (see '_restart_strategies'). Whatever happens, the state left on the
+        solver is rebuilt from the attempt with the smallest residual, not merely
+        the last one attempted. If nothing converges, the failure is reported and
+        -- unless 'on_convergence_failure' is set to 'warn' -- a ConvergenceError
+        is raised, so that a non-solution cannot silently propagate into an outer
+        self-consistency loop.
         """
         start_t = time()
 
@@ -823,8 +946,12 @@ class Solver:
                 "to warm-start the Potthoff band-shift correction."
             )
             self.use_potthoff_band_shift = False
-            self.solve(maxfev=maxfev, res_tol=res_tol)
-            self.use_potthoff_band_shift = True
+            try:
+                self.solve(maxfev=maxfev, res_tol=res_tol)
+            finally:
+                # Restore the flag even if the pre-solve raised, so the solver is
+                # not silently left in plain KK-IPT-n0 mode.
+                self.use_potthoff_band_shift = True
             has_guess = True
 
         # Default initial guesses
@@ -839,16 +966,51 @@ class Solver:
 
         x0 = self._pack_x(mu0_guess, n_guess)
 
-        self.band_shift_diverged_count = 0
+        attempts = [("initial guess", x0, "hybr")]
+        attempts += self._restart_strategies(x0)[: max(0, int(self.max_restarts))]
 
-        sol = root(
-            self.residual_vector,
-            x0,
-            method="hybr",
-            tol=res_tol,
-            options={"maxfev": maxfev},
-        )
+        best_label, best_sol, best_res = None, None, np.inf
+        for attempt, (label, x_start, method) in enumerate(attempts, start=1):
+            self.band_shift_diverged_count = 0
+            options = {"maxfev": maxfev} if method == "hybr" else {"maxiter": maxfev}
 
+            sol = root(self.residual_vector, x_start, method=method,
+                       tol=res_tol, options=options)
+            residual = float(np.linalg.norm(sol.fun))
+
+            # Do NOT trust sol.success on its own. Levenberg-Marquardt in
+            # particular reports success once it stops making progress, which it
+            # will happily do at a point that is not a root at all: at U=10 with a
+            # strongly polarized start it returns success with |residual| ~ 1e-2,
+            # against ~1e-12 for the genuine solution. The only safe acceptance
+            # criterion is the residual itself.
+            accepted = residual <= self.residual_tol
+
+            if accepted or residual < best_res:
+                best_label, best_sol, best_res = label, sol, residual
+
+            self.solve_attempts = attempt
+            if accepted:
+                if attempt > 1:
+                    print(f"Recovered on attempt {attempt}/{len(attempts)} "
+                          f"using the '{label}' restart.")
+                break
+
+            note = "" if not sol.success else " (the algorithm claimed success)"
+            print(
+                f"WARNING: solve attempt {attempt}/{len(attempts)} "
+                f"('{label}') did not converge (|residual| = {residual:.3e} > "
+                f"{self.residual_tol:.1e}){note}: {sol.message.strip()}"
+            )
+
+        sol = best_sol
+        self.solve_strategy = best_label
+        self.solve_residual = best_res
+        # Report convergence by the residual criterion rather than by the
+        # algorithm's own flag, so that a truthy sol.success always means
+        # "this really is a root of the coupled system".
+        sol.scipy_success = bool(sol.success)
+        sol.success = bool(best_res <= self.residual_tol)
         mu0_all, n_all = self._unpack_x(sol.x)
 
         # Store in the old dict-of-arrays format for compatibility
@@ -888,5 +1050,23 @@ class Solver:
                     f"root-finder. Check 'sol.success' and 'band_shift_error' before "
                     f"trusting the final result."
                 )
+
+        if not sol.success:
+            failure = (
+                f"ERROR: the coupled root solve did not converge after "
+                f"{self.solve_attempts} attempt(s) (1 initial + "
+                f"{self.solve_attempts - 1} restart(s), 'max_restarts' = "
+                f"{self.max_restarts}). Best |residual| = {best_res:.6e}, from the "
+                f"'{best_label}' start, against the acceptance tolerance "
+                f"'residual_tol' = {self.residual_tol:.1e}. scipy reports: "
+                f"{sol.message.strip()} "
+                "The Green's function, self-energy and occupations now stored on "
+                "this solver belong to that non-converged point: they are NOT a "
+                "solution of the impurity problem and must not be fed into an "
+                "outer self-consistency loop."
+            )
+            print(failure)
+            if self.on_convergence_failure == "raise":
+                raise ConvergenceError(failure)
 
         return sol

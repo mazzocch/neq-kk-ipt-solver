@@ -79,6 +79,9 @@ def test_reproduces_nonequilibrium_reference_occupations(case, tmp_path):
     sol = solver.solve()
 
     assert sol.success
+    # sol.success now means the residual really is small (see
+    # tests/test_convergence_handling.py); assert it directly too.
+    assert solver.solve_residual < 1e-9
 
     assert solver.n_occ["up"] == pytest.approx(expected["n_occ_up"], abs=1e-4)
     assert solver.n_occ["down"] == pytest.approx(expected["n_occ_down"], abs=1e-4)
