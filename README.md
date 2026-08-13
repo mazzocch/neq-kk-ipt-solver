@@ -137,6 +137,9 @@ solver.store_output()  # writes ./out/solver_output_<timestamp>.json
 | `band_shift_inner_maxiter` | integer | `30` | Max inner fixed-point iterations for the interacting band shift `B_tilde` (only used if the above is `true`). |
 | `band_shift_mixing` | number | `0.5` | Linear mixing factor in (0, 1] for that inner iteration. |
 | `band_shift_tol` | number | `1e-8` | Convergence tolerance (max change in `B_tilde`) for that inner iteration. |
+| `max_restarts` | integer | `5` | Extra starting points tried if the coupled root solve fails. `0` disables restarts. |
+| `on_convergence_failure` | string | `"raise"` | `"raise"` reports the failure and raises `ConvergenceError`; `"warn"` only prints and returns the non-converged result. |
+| `residual_tol` | number | `1e-6` | Acceptance tolerance on the residual norm. An attempt counts as converged only below this, whatever the optimizer's own flag says. |
 
 ### `solver.modifiable`
 
@@ -146,7 +149,7 @@ solver.store_output()  # writes ./out/solver_output_<timestamp>.json
 
 ### `solver.dynamic`
 
-Exactly one of the following three hybridization specifications must be given, plus `output_dir`:
+Exactly one of the following four hybridization specifications must be given, plus `output_dir`. They are tried in the order listed.
 
 **1. Explicit hybridization arrays** (fully general):
 
@@ -155,7 +158,34 @@ Exactly one of the following three hybridization specifications must be given, p
 | `Delta_R_im` | object | Imaginary part of the retarded hybridization, per flavor (e.g. `{"up": [...], "down": [...]}`). The real part is reconstructed via Kramers-Kronig. |
 | `Delta_K_im` | object | Imaginary part of the Keldysh hybridization, per flavor. |
 
-**2. Lorentzian hybridization** (single number = spin-symmetric, or per-flavor dict = spin-dependent):
+**2. Semicircular (semi-elliptic) hybridization** (single number = spin-symmetric, or per-flavor dict = spin-dependent):
+
+| Key | Type | Description |
+|---|---|---|
+| `Delta_D` | number or object | Half-bandwidth(s) of the semicircle (must be positive). Mutually exclusive with `Delta_gamma`. |
+| `Delta_center` | number or object | Center(s) of the semicircle. Required, as for the Lorentzian — pass `0` for a band centered on zero. |
+| `Delta_eta` | number or object | Constant broadening subtracted from `Im Delta^R`, removing the hard zeros outside the band. Optional, default `0`. See below. |
+| `mu` | number | Chemical potential of the hybridization/bath. |
+| `V` | number | Applied voltage bias between the two leads (`mu_l = mu + V/2`, `mu_r = mu - V/2`). |
+
+Normalized to unit total spectral weight, like the Lorentzian below, so the peak
+strength is `Gamma = -Im Delta^R(center) = 2/Delta_D` — a semicircle matching a
+given `Gamma` needs `Delta_D = 2/Gamma`. For any other normalization, pass
+`Delta_R_im`/`Delta_K_im` directly.
+
+`Delta_eta` exists because a bare semicircle has `Im Delta^R` *exactly* zero
+outside the band, which turns any impurity feature landing there into a true
+bound state — see "Numerical considerations" below. A small constant floor
+gives such states a resolvable width. It is not free: the floor is a weak flat
+band spanning the whole grid, so it adds `2*w_max*eta/pi` to the hybridization
+weight `D_1` (about 19% at `eta=0.01`, `w_max=30`) and makes `D_1` depend on
+`w_max`. `D_2` is unaffected. As a guide, at `Delta_D=2`, `U=4`,
+`N_points=10001`, `w_max=30`: `eta=0.001` is not enough (`int A` still 0.998),
+`eta=0.005`–`0.01` restores `int A` to 0.99999 and every sum rule. Keeping the
+bath bandwidth comfortably larger than `U` avoids the problem entirely and
+leaves `D_1 = 1` exact, so prefer that when you can.
+
+**3. Lorentzian hybridization** (single number = spin-symmetric, or per-flavor dict = spin-dependent):
 
 | Key | Type | Description |
 |---|---|---|
@@ -164,7 +194,7 @@ Exactly one of the following three hybridization specifications must be given, p
 | `mu` | number | Chemical potential of the hybridization/bath. |
 | `V` | number | Applied voltage bias between the two leads (`mu_l = mu + V/2`, `mu_r = mu - V/2`). |
 
-**3. Flat-DOS reservoir** (fallback if neither of the above is given):
+**4. Flat-DOS reservoir** (fallback if none of the above is given):
 
 | Key | Type | Description |
 |---|---|---|
@@ -207,6 +237,67 @@ inaccurate -- there is no built-in check for this, so it is worth
 confirming that the relevant spectral weight has actually decayed near
 `+/-w_max` before trusting a result computed on a coarser grid.
 
+**Hybridizations with a hard band edge can produce bound states the grid
+cannot represent.** The semicircular option (and any `Delta_R_im` you supply
+that vanishes identically outside some window) has `Im Delta^R = 0` beyond the
+band, so an impurity feature landing there — typically a Hubbard band, when `U`
+is large compared with the bath bandwidth — becomes a genuine bound state, a
+delta function on the real axis. On a frequency grid that shows up as a very
+tall, very narrow peak whose weight is under-counted: with `Delta_D=2`, `U=4`
+and `N_points=10001`, the upper Hubbard band sits near `w = +5.9` outside the
+band and `int A(w) dw` drops to ~0.97 instead of 1, which then breaks every sum
+rule. Checking `int A(w) dw == 1` is the fastest way to detect this.
+
+There are three fixes, in rough order of preference: keep the bath bandwidth
+comfortably larger than `U`, so nothing lands outside the band and `D_1` stays
+exactly 1; set `Delta_eta` (0.005–0.01 on the grid above) to give the state a
+resolvable width, at the cost of a `w_max`-dependent shift in `D_1`; or refine
+the grid until the peak is resolved (`N_points=80001` restores `int A` to
+0.99999 in the case above, which is expensive). The flat-DOS reservoir is
+immune either way — its `T_fict` edge smearing leaves `Im Delta^R` nonzero
+everywhere.
+
+**The spectral moment sum rules are a much more sensitive grid diagnostic than
+the occupations.** `n` and `n_double` are `w^0`-weighted integrals of
+integrands that are already negligible in the tails, and are correspondingly
+insensitive to the grid: over a 4x range in `w_max` and an 8x range in
+resolution they do not move in the sixth decimal. The moments carry a `w^m`
+weight, which amplifies exactly the tail region where the numerics are
+weakest, so if the `m=3` sum rule is converged the occupations are converged
+with a large margin. See `scripts/check_spectral_moments.py`.
+
+## Non-convergence
+
+A root solve that stops without finding a solution still leaves a Green's
+function, a self-energy and occupations on the solver. They are not a solution
+of the impurity problem, and consuming them silently corrupts every subsequent
+iteration of an outer loop such as DMFT. The solver therefore does three things:
+
+1. **Retries.** If the first solve fails, up to `max_restarts` further starting
+   points are tried: a cold start, a Weiss field aligned with the
+   Hartree-shifted impurity level, two oppositely polarized guesses, a switch to
+   Levenberg-Marquardt, and finally seeded jitter around the original guess. The
+   sequence is deterministic. Whatever happens, the state left on the solver is
+   rebuilt from the attempt with the *smallest* residual, not merely the last.
+
+2. **Judges convergence by the residual, not by the optimizer's flag.** An
+   attempt counts as converged only if `|residual| <= residual_tol`. This is not
+   pedantry: scipy's Levenberg-Marquardt reports success as soon as it stops
+   making progress, and will do so at points that are not roots — at `U=10` with
+   a strongly polarized start it returns success with `|residual| ~ 1e-2`,
+   against `~1e-12` for the genuine solution, and the m=1 sum rule is then off by
+   6e-2 instead of 1e-4. `sol.success` is overwritten to reflect the residual
+   test; the optimizer's own verdict is preserved as `sol.scipy_success`.
+
+3. **Fails loudly.** If nothing converges, the failure is printed and a
+   `ConvergenceError` is raised, so a non-solution cannot propagate. Set
+   `on_convergence_failure` to `"warn"` to get the non-converged result back
+   instead — appropriate for diagnostic sweeps that deliberately probe unstable
+   regions and record the outcome, not for production runs.
+
+After `solve()`, `solve_attempts`, `solve_strategy` and `solve_residual` record
+how many starting points were tried, which one won, and the residual achieved.
+
 ## API overview
 
 - `Solver(input_data)` — construct and validate a solver instance from the JSON-schema-checked input above.
@@ -214,6 +305,24 @@ confirming that the relevant spectral weight has actually decayed near
 - `Solver.calc_occupations()` — (called internally by `solve()`) computes occupations and the exact Keldysh Galitskii-Migdal double occupancy, valid both in and out of equilibrium.
 - `Solver.store_output()` — writes a JSON file with the full solution (Green's functions, self-energy, occupations, input parameters, git-commit provenance).
 - `Solver.set_Delta_external(Delta)`, `Solver.set_onsite_energies_external(...)` — for embedding this solver inside a larger self-consistency loop (e.g. DMFT), where the hybridization/onsite energy are supplied externally each iteration instead of built once from `solver.dynamic`.
+
+### `neq_kk_ipt_solver.moments`
+
+Spin-resolved spectral moment sum rules, valid in and out of equilibrium.
+
+- `check_sum_rules(solver)` — per-flavor comparison of the closed-form `m=1,2,3` moments against the numerically integrated `int dw w^m A(w)`, plus the `m=0` normalization.
+- `closed_form_moments(solver, fl)` — the closed forms alone.
+- `spectral_moments(w, GF_R, orders)` / `hybridization_moments(w, Delta_R, kmax)` — the raw integrals.
+- `band_shift_correlator(w, GF, SE, Delta, U)` — the Potthoff-Wegner-Nolting band-shift correlator that the `m=3` rule needs, returned raw (not divided by `n(1-n)`).
+
+`m=1` and `m=2` close on the occupations alone and are therefore external
+benchmarks. `m=3` additionally needs the band-shift correlator, which is a
+functional of the converged solution rather than an independently known
+quantity, so that one is a consistency check between two different routes to
+the same number — which is exactly what makes it sensitive to whether the
+self-energy ansatz carries the right `m=3` structure.
+
+`scripts/check_spectral_moments.py` runs the whole comparison at `V=1`.
 
 ## Status
 
@@ -228,6 +337,16 @@ two impurity levels) and genuine nonequilibrium, voltage-biased (U=4,
 T=0.1175, V=1.0, two impurity levels) regimes -- benchmarking the full
 Green's function and self-energy (both flavors), not just the scalar
 occupations and double occupancy.
+
+Coverage also includes the spin-resolved spectral moment sum rules
+(`neq_kk_ipt_solver.moments`). At V=1 the `m=1` and `m=2` rules hold to
+better than 1e-4 for both self-energy schemes, while the `m=3` rule -- which
+is what the Potthoff-Wegner-Nolting band shift exists to enforce -- is
+violated by 2-4% by plain KK-IPT-n0 and satisfied to ~1e-4 once the
+correction is enabled. That deviation is flat in both `w_max` and grid
+spacing, so it is a property of the ansatz rather than a numerical artifact.
+This validates the correction against the moment it is constructed from; an
+independent benchmark against AMEA is still outstanding.
 
 ## License
 
