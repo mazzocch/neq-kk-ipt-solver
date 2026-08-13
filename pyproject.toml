@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neq-kk-ipt-solver"
-version = "0.1.0"
+version = "0.2.0"
 description = "Nonequilibrium Kajueter-Kotliar Iterated Perturbation Theory (IPT) impurity solver"
 readme = "README.md"
 license = { text = "MIT" }

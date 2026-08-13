@@ -326,27 +326,44 @@ self-energy ansatz carries the right `m=3` structure.
 
 ## Status
 
-This is an early (v0.1.0) extraction from a larger research codebase. The
-core physics has been validated against published benchmarks (see the papers
-above); the packaging, test coverage, and documentation here are a minimum
-viable version, not yet exhaustive.
+This is a v0.2.0 extraction from a larger research codebase. The core physics
+has been validated against published benchmarks (see the papers above). The
+packaging and documentation are deliberately modest; the test suite is not --
+`pytest` runs 94 tests in about 45 seconds, and they are the main reason to
+trust a change to this code.
 
-Test coverage includes physics regression tests reproducing real, previously
-computed single-band IPT results in both the equilibrium (U=5.5, T=0.05,
-two impurity levels) and genuine nonequilibrium, voltage-biased (U=4,
-T=0.1175, V=1.0, two impurity levels) regimes -- benchmarking the full
-Green's function and self-energy (both flavors), not just the scalar
-occupations and double occupancy.
+**Physics regression.** Three fixtures pin previously computed results and are
+reproduced exactly: equilibrium (U=5.5, T=0.05, two impurity levels),
+voltage-biased nonequilibrium (U=4, T=0.1175, V=1.0, two impurity levels), and
+a spin-dependent hybridization in equilibrium (Lorentzians centred at +/-1,
+two temperatures, two U straddling a change in the majority spin). The first
+two benchmark the full Green's function and self-energy for both flavors, not
+just the scalar observables. Alongside the pinned numbers the suite asserts
+properties that hold independently of any fixture -- the spectral
+normalization, and the exact `n_up + n_down = 1` imposed by the combined
+particle-hole x spin-flip symmetry of the spin-dependent setup.
 
-Coverage also includes the spin-resolved spectral moment sum rules
-(`neq_kk_ipt_solver.moments`). At V=1 the `m=1` and `m=2` rules hold to
-better than 1e-4 for both self-energy schemes, while the `m=3` rule -- which
-is what the Potthoff-Wegner-Nolting band shift exists to enforce -- is
-violated by 2-4% by plain KK-IPT-n0 and satisfied to ~1e-4 once the
-correction is enabled. That deviation is flat in both `w_max` and grid
-spacing, so it is a property of the ansatz rather than a numerical artifact.
-This validates the correction against the moment it is constructed from; an
-independent benchmark against AMEA is still outstanding.
+**Sum rules.** The spin-resolved spectral moments (`neq_kk_ipt_solver.moments`)
+give an independent check that does not rely on any stored reference. `m=1`
+and `m=2` close on the occupations alone and hold to better than 1e-4 for both
+self-energy schemes. `m=3` does not close: it additionally needs the
+Potthoff-Wegner-Nolting band-shift correlator, which is exactly what that
+correction supplies. Plain KK-IPT-n0 violates it -- by a few percent for the
+flat-DOS reservoir at V=1, and by tens of percent for a spin-dependent
+hybridization at strong coupling -- while the corrected scheme satisfies it to
+the numerical floor, three to four orders of magnitude better. The deviation is
+flat in both `w_max` and grid spacing, so it is a property of the ansatz and
+not a numerical artifact. This validates the correction against the moment it
+is constructed from, which verifies the implementation rather than the physics:
+the informative quantity is the size of the defect in the uncorrected scheme.
+
+**Convergence.** A separate group of tests covers the restart ladder and the
+refusal to return a non-solution, including the case that motivated it -- an
+optimizer reporting success at a point that is not a root.
+
+What is *not* covered: agreement with a numerically exact solver. Every physics
+test asserts reproduction, not correctness. IPT is a controlled approximation,
+and what the suite pins is what this scheme converges to.
 
 ## License
 

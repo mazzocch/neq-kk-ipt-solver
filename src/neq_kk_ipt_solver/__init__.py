@@ -6,6 +6,6 @@ Author: Tommaso Maria Mazzocchi
 from .solver import ConvergenceError, Solver
 from .utils import Keldysh, fermi, KK
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = ["Solver", "ConvergenceError", "Keldysh", "fermi", "KK", "__version__"]
