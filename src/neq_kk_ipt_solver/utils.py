@@ -40,10 +40,29 @@ class Keldysh:
             raise ValueError("Attribute 'R' in Keldysh class is 'None': cannot compute spectrum.")
 
     def calc_distribution(self):
-        if self.R is not None and self.K is not None:
-            self.F = 0.5 * (1 - np.imag(self.K) / (2 * np.imag(self.R)))
-        else:
+        """
+        Generalized distribution function F = [1 - Im K / (2 Im R)] / 2.
+
+        F is undefined wherever the spectral weight vanishes: Im R -> 0 makes
+        the ratio 0/0 or x/0, which on a wide frequency grid happens over the
+        whole region beyond the bands. Those points carry no spectral weight,
+        so F has no meaning there and is set to NaN rather than +-inf -- and,
+        more to the point, computing it no longer floods stderr with
+        divide-by-zero RuntimeWarnings on a perfectly healthy solve.
+
+        F is diagnostic only. The occupation density N is built from A and K
+        directly (see calc_occupation), so nothing in the solve depends on it.
+        """
+        if self.R is None or self.K is None:
             raise ValueError("Attributes 'R' or 'K' in Keldysh class are 'None': cannot compute distribution function.")
+
+        denominator = 2 * np.imag(self.R)
+        ratio = np.divide(
+            np.imag(self.K), denominator,
+            out=np.full_like(denominator, np.nan, dtype=float),
+            where=denominator != 0,
+        )
+        self.F = 0.5 * (1 - ratio)
 
     def calc_occupation(self):
         if self.A is not None and self.F is not None:

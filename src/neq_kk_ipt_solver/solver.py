@@ -48,8 +48,12 @@ class Solver:
         self.dir_path = os.path.dirname(os.path.realpath(__file__))
         self.input_data = input_data
 
+        # Microseconds are kept deliberately. Truncating to whole seconds meant
+        # two solves started within the same second produced the same output
+        # filename, and the second silently overwrote the first -- easy to hit
+        # in a fast outer loop that stores every iteration.
         now = datetime.datetime.now()
-        formatted_now = now.replace(microsecond=0).isoformat()
+        formatted_now = now.isoformat()
 
         self.default_config_static = {
             "spin_sym": True,
