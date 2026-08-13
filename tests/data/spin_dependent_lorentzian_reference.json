@@ -1,0 +1,90 @@
+{
+  "setup": {
+    "hybridization": "Lorentzian, spin-dependent",
+    "Delta_center": {
+      "up": 1.0,
+      "down": -1.0
+    },
+    "Delta_gamma": 1.0,
+    "mu": 0.0,
+    "V": 0.0,
+    "N_points": 10001,
+    "w_max": 50.0,
+    "onsite_energy": "eps_up = eps_down = -U/2 (spin independent)",
+    "start": "cold start, mu0=0 and n=1/2; no warm start across U or T"
+  },
+  "cases": {
+    "plain_T0p02_U4": {
+      "U": 4.0,
+      "T": 0.02,
+      "scheme": "plain",
+      "n_occ_up": 0.5708309656489691,
+      "n_occ_down": 0.429164180927307,
+      "n_double": 0.08837546875466702,
+      "residual_norm": 9.663719660838783e-10
+    },
+    "plain_T0p02_U8": {
+      "U": 8.0,
+      "T": 0.02,
+      "scheme": "plain",
+      "n_occ_up": 0.44089965732612507,
+      "n_occ_down": 0.5590842980372813,
+      "n_double": 0.030758353506257663,
+      "residual_norm": 2.3664290568339792e-11
+    },
+    "potthoff_T0p02_U4": {
+      "U": 4.0,
+      "T": 0.02,
+      "scheme": "potthoff",
+      "n_occ_up": 0.5764868597907089,
+      "n_occ_down": 0.42350803060437053,
+      "n_double": 0.08784971633412733,
+      "residual_norm": 1.008410140090063e-15
+    },
+    "potthoff_T0p02_U8": {
+      "U": 8.0,
+      "T": 0.02,
+      "scheme": "potthoff",
+      "n_occ_up": 0.4183991936356736,
+      "n_occ_down": 0.5815831990396912,
+      "n_double": 0.03009451951031195,
+      "residual_norm": 4.682062045615508e-15
+    },
+    "plain_T0p05_U4": {
+      "U": 4.0,
+      "T": 0.05,
+      "scheme": "plain",
+      "n_occ_up": 0.5524481553317104,
+      "n_occ_down": 0.44754669450914475,
+      "n_double": 0.08497059405972301,
+      "residual_norm": 6.263874887342801e-10
+    },
+    "plain_T0p05_U8": {
+      "U": 8.0,
+      "T": 0.05,
+      "scheme": "plain",
+      "n_occ_up": 0.44789178271793373,
+      "n_occ_down": 0.5520901745897172,
+      "n_double": 0.02991447491856131,
+      "residual_norm": 9.925793695092158e-12
+    },
+    "potthoff_T0p05_U4": {
+      "U": 4.0,
+      "T": 0.05,
+      "scheme": "potthoff",
+      "n_occ_up": 0.5552960564246218,
+      "n_occ_down": 0.4446983490812132,
+      "n_double": 0.08487241967911319,
+      "residual_norm": 5.293812809710778e-13
+    },
+    "potthoff_T0p05_U8": {
+      "U": 8.0,
+      "T": 0.05,
+      "scheme": "potthoff",
+      "n_occ_up": 0.41321352426617874,
+      "n_occ_down": 0.5867664666923926,
+      "n_double": 0.02870216260736394,
+      "residual_norm": 2.936827882902002e-13
+    }
+  }
+}
