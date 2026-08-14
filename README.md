@@ -7,6 +7,16 @@ steady states, with an optional Potthoff-Wegner-Nolting [Phys. Rev. B 55,
 limitations" below for where the method has been benchmarked and where it has
 not.
 
+![Impurity spectral function and retarded self-energy for a spin-dependent hybridization](examples/output/05_spin_dependent_hybridization.png)
+
+<sub>A per-flavor bath — Lorentzians centred at `+1` for spin up and `-1` for
+spin down — in equilibrium, with a spin-independent onsite energy at the
+particle-hole symmetric point. The solution is nonetheless strongly polarized.
+Produced by
+[`examples/05_spin_dependent_hybridization.py`](examples/05_spin_dependent_hybridization.py);
+four further setups, including a voltage-biased steady state, are in
+[`examples/`](examples/).</sub>
+
 This version has been authored by Tommaso Maria Mazzocchi and used to generate 
 the results discussed at this link: https://doi.org/10.48550/arXiv.2604.15942.
 The preprint is currenly undergoing peer review in Phys. Rev. B and the DOI
