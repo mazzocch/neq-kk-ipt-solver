@@ -8,7 +8,8 @@ dist/
 venv/
 .DS_Store
 *.json.out
-output/
+/output/
 results/
 texput.log
 research/
+examples/__pycache__/

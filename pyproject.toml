@@ -28,6 +28,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=7.0"]
+examples = ["matplotlib>=3.7"]
 
 [project.urls]
 Repository = "https://github.com/mazzocch/neq-kk-ipt-solver"

@@ -3,7 +3,9 @@
 A Kajueter-Kotliar Iterated Perturbation Theory (IPT) [Phys. Rev. Lett. 77, 131 (1996)]
 impurity solver for arbitrary filling extended to nonequilibrium (Keldysh)
 steady states, with an optional Potthoff-Wegner-Nolting [Phys. Rev. B 55,
-16132 (1997)] m=3 moment band-shift correction (tested but not benchmarked yet).
+16132 (1997)] m=3 moment band-shift correction. See "Accuracy and
+limitations" below for where the method has been benchmarked and where it has
+not.
 
 This version has been authored by Tommaso Maria Mazzocchi and used to generate 
 the results discussed at this link: https://doi.org/10.48550/arXiv.2604.15942.
@@ -43,7 +45,7 @@ to determine the impurity self-energy and Green's function self-consistently.
 
 An optional correction (`use_potthoff_band_shift`) adds the nonequilibrium
 Keldysh analogue of the Potthoff-Wegner-Nolting m=3 moment band-shift term
-[Phys. Rev. B 55, 16132 (1997)] to the self-energy (tested but not benchmarked yet).
+[Phys. Rev. B 55, 16132 (1997)] to the self-energy.
 
 ## Installation
 
@@ -113,6 +115,22 @@ print("Double occupancy:", solver.n_double)
 
 solver.store_output()  # writes ./out/solver_output_<timestamp>.json
 ```
+
+## Examples
+
+Five worked setups live in [`examples/`](examples/), each a runnable script
+that solves one system, reports the occupations and double occupancy, and
+plots the spin-resolved spectral function and retarded self-energy:
+
+```bash
+pip install ".[examples]"     # adds matplotlib
+python examples/01_half_filling.py
+```
+
+They cover half filling, near and far from half filling, a voltage-biased
+nonequilibrium steady state, and a spin-dependent (per-flavor) hybridization.
+See [`examples/README.md`](examples/README.md) for the figures and a summary of
+what each one demonstrates.
 
 ## Parameter reference
 
@@ -324,6 +342,28 @@ self-energy ansatz carries the right `m=3` structure.
 
 `scripts/check_spectral_moments.py` runs the whole comparison at `V=1`.
 
+## Accuracy and limitations
+
+The core scheme is validated against the published benchmarks in the papers
+above. Beyond that, two things are worth stating plainly.
+
+**The band-shift correction is benchmarked in the paramagnetic case, where it
+changes nothing.** For a spin-independent hybridization and onsite energy, the
+Potthoff-corrected solver has been compared against AMEA and gives results
+indistinguishable from plain KK-IPT-n0. The correction is therefore verified
+not to break the case that was already known to work, but that comparison
+cannot tell you what it is worth, because there is nothing for it to fix there.
+
+**For a spin-dependent hybridization, agreement with AMEA holds only up to
+about `U = 4`.** Beyond that, both KK-IPT variants develop a change in which
+spin is the majority species as `U` grows, and AMEA does not: it keeps the same
+majority spin across the whole range. The KK-IPT behaviour is not a bug in this
+implementation -- the solution is unique at each `U`, is reached from any
+starting point, and satisfies the `m=1` and (with the correction) `m=3` sum
+rules to the numerical floor -- but it is a limitation of the ansatz. Treat
+spin-dependent results at strong coupling as qualitative, and prefer a
+controlled solver if the polarization itself is the quantity of interest.
+
 ## Status
 
 This is a v0.2.0 extraction from a larger research codebase. The core physics
@@ -356,6 +396,8 @@ flat in both `w_max` and grid spacing, so it is a property of the ansatz and
 not a numerical artifact. This validates the correction against the moment it
 is constructed from, which verifies the implementation rather than the physics:
 the informative quantity is the size of the defect in the uncorrected scheme.
+See "Accuracy and limitations" above for what the comparison against AMEA does
+and does not establish.
 
 **Convergence.** A separate group of tests covers the restart ladder and the
 refusal to return a non-solution, including the case that motivated it -- an
