@@ -70,6 +70,7 @@ class Solver:
 
         self.filename = f"solver_output_{formatted_now}.json"
         self.n_double = None
+        self.n_double_per_flavor = {}
         self.n_occ = {}
         self.n0_occ = {}
         self.impurity_onsite_e = {}
@@ -258,6 +259,7 @@ class Solver:
                 "SE_K_re": np.real(self.SE[fl].K).tolist(),
                 "SE_K_im": np.imag(self.SE[fl].K).tolist(),
                 "n_occ": self.n_occ[fl],
+                "n_double": self.n_double_per_flavor[fl],
                 "alpha": self.alpha[fl],
                 "beta": self.beta[fl],
                 "B_tilde": self.B_tilde[fl],
@@ -819,25 +821,39 @@ class Solver:
         via the generalized distribution function and the double occupation.
 
         n_double uses the exact Keldysh Galitskii-Migdal expression for the
-        double occupancy (general, valid in and out of equilibrium):
+        double occupancy (general, valid in and out of equilibrium), evaluated
+        per flavor and averaged over the spin species:
 
-            n_d = -i/(2*pi*U) * integral dw [Sigma^R(w) G^<(w) + Sigma^<(w) G^A(w)]
+            n_d = -i/(2*pi*U) * (1/2) * sum_{s} integral dw [Sigma^R_{s}(w) G^<_{s}(w) + Sigma^<_{s}(w) G^A_{s}(w)]
 
-        with X^< = X^K/2 - i*Im(X^R) and G^A = (G^R)^*, Sigma^A = (Sigma^R)^*.
+        with X^< = X^K/2 - i*Im(X^R) and X^A = (X^R)^*.
+
+        This is an exact identity, so the two flavor-resolved estimates must
+        coincide for the true interacting solution -- but within an
+        approximate self-energy scheme they need not agree exactly once the
+        solution is spin-polarized. The individual values are kept in
+        'n_double_per_flavor' as a diagnostic: a large spread between them is
+        a direct measure of how badly the approximation violates this exact
+        flavor-independence.
         """
         for fl in self.flavors:
             self.n_occ[fl] = np.trapezoid(self.GF[fl].N, self.w)
             self.n0_occ[fl] = np.trapezoid(self.G0[fl].N, self.w)
 
-        fl0 = self.flavors[0]
-        GF_R = self.GF[fl0].R
-        GF_A = GF_R.conj()
-        GF_lt = self.GF[fl0].K / 2 - 1j * np.imag(GF_R)
-        SE_R = self.SE[fl0].R
-        SE_lt = self.SE[fl0].K / 2 - 1j * np.imag(SE_R)
+        self.n_double_per_flavor = {}
 
-        integrand = SE_R * GF_lt + SE_lt * GF_A
-        self.n_double = np.real(-1j / (2 * np.pi * self.U) * np.trapezoid(integrand, self.w))
+        for fl in self.flavors:
+
+            GF_R = self.GF[fl].R
+            GF_A = GF_R.conj()
+            GF_lt = self.GF[fl].K / 2 - 1j * np.imag(GF_R)
+            SE_R = self.SE[fl].R
+            SE_lt = self.SE[fl].K / 2 - 1j * np.imag(SE_R)
+
+            integrand = SE_R * GF_lt + SE_lt * GF_A
+            self.n_double_per_flavor[fl] = np.real(-1j / (2 * np.pi * self.U) * np.trapezoid(integrand, self.w))
+
+        self.n_double = np.mean(list(self.n_double_per_flavor.values()))
 
     def _restart_strategies(self, x0_initial: np.ndarray) -> list:
         """
