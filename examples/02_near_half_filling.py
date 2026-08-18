@@ -49,7 +49,7 @@ def main() -> None:
     from _common import run
     print(__doc__)
     run(build_input,
-        title=r"Near half filling: $U=6$, $\epsilon=-3.25$, flat-DOS bath",
+        title=r"Near half filling: $U=6$, $\epsilon=-3.25$, box-shaped-DOS bath",
         subtitle=r"$D=10$, $\Gamma=1$, $T=0.05$, $\mu=0$, $V=0$ -- equilibrium, spin symmetric",
         filename="02_near_half_filling.png")
 

@@ -1,7 +1,7 @@
 """
 Example 1 -- half filling
 
-The particle-hole symmetric point. A flat-DOS ("box") reservoir of
+The particle-hole symmetric point. A box-shaped-DOS reservoir of
 half-bandwidth D = 10 with t_l = t_r = 1/sqrt(2), so that Gamma = 1, at
 T = 0.05 in equilibrium (mu = V = 0). With eps = -U/2 the impurity sits at
 half filling, n_up = n_down = 1/2, and the spectral function is symmetric
@@ -50,7 +50,7 @@ def main() -> None:
     from _common import run
     print(__doc__)
     run(build_input,
-        title=r"Half filling: $U=6$, $\epsilon=-U/2=-3$, flat-DOS bath",
+        title=r"Half filling: $U=6$, $\epsilon=-U/2=-3$, box-shaped-DOS bath",
         subtitle=r"$D=10$, $\Gamma=1$, $T=0.05$, $\mu=0$, $V=0$ -- equilibrium, spin symmetric",
         filename="01_half_filling.png")
 

@@ -50,7 +50,7 @@ def main() -> None:
     from _common import run
     print(__doc__)
     run(build_input,
-        title=r"Voltage bias: $U=6$, $\epsilon=-3.25$, $V=1.5$, flat-DOS bath",
+        title=r"Voltage bias: $U=6$, $\epsilon=-3.25$, $V=1.5$, box-shaped-DOS bath",
         subtitle=r"$D=10$, $\Gamma=1$, $T=0.05$, $\mu=0$ -- nonequilibrium steady state",
         filename="04_voltage_bias.png")
 

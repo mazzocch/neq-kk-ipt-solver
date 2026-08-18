@@ -1,8 +1,8 @@
 """
 Nonequilibrium physics regression tests: reproduce real, previously-computed
 single-band IPT results from electric_field_hypercubic/runs_kkipt_new, a
-genuine voltage-biased (V=1.0) steady state -- U=4, T=0.1175, flat-DOS lead
-hybridization (Gamma set by t_l/t_r/D_l/D_r), two impurity levels (eps=0,
+genuine voltage-biased (V=1.0) steady state -- U=4, T=0.1175, box-shaped-DOS
+lead hybridization (Gamma set by t_l/t_r/D_l/D_r), two impurity levels (eps=0,
 particle-hole symmetric; eps=-2.25, asymmetric filling).
 
 This exercises the solver's actual nonequilibrium capability (a real chemical

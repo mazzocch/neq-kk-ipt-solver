@@ -166,7 +166,7 @@ def build_nonequilibrium_fixture() -> tuple[dict, dict]:
 
     meta["source"] = (
         "Nonequilibrium single-band IPT, U=4, T=0.1175, for the representative voltage bias "
-        "V=1.0, flat-DOS lead hybridization, two impurity levels eps=0 and eps=-2.25. "
+        "V=1.0, box-shaped-DOS lead hybridization, two impurity levels eps=0 and eps=-2.25. "
         "Hybridization and GF/SE arrays are in the companion .npz file."
     )
     return meta, npz_arrays

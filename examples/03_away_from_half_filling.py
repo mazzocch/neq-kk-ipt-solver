@@ -50,7 +50,7 @@ def main() -> None:
     from _common import run
     print(__doc__)
     run(build_input,
-        title=r"Away from half filling: $U=6$, $\epsilon=0$, flat-DOS bath",
+        title=r"Away from half filling: $U=6$, $\epsilon=0$, box-shaped-DOS bath",
         subtitle=r"$D=10$, $\Gamma=1$, $T=0.05$, $\mu=0$, $V=0$ -- equilibrium, spin symmetric",
         filename="03_away_from_half_filling.png")
 

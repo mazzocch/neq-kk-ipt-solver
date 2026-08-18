@@ -74,8 +74,8 @@ def _n_points(w_max: float, dw: float = DW) -> int:
     return n if n % 2 == 1 else n + 1
 
 
-def flat_dos_input(eps: float, w_max: float, potthoff: bool, tmp_dir: str) -> dict:
-    """Solver input using the built-in flat-DOS reservoir at the preprint's parameters."""
+def box_shaped_dos_input(eps: float, w_max: float, potthoff: bool, tmp_dir: str) -> dict:
+    """Solver input using the built-in box-shaped-DOS reservoir at the preprint's parameters."""
     return {
         "global_parameters": {
             "N_points": _n_points(w_max),
@@ -141,7 +141,7 @@ def spin_asymmetric_input(w_max: float, potthoff: bool, tmp_dir: str) -> dict:
     off-centre lead bands. This is the case the preprint does not cover --
     it makes n_up != n_down, eps_up != eps_down and, crucially, D_2 != 0,
     so it exercises the two parts of the m=3 sum rule that the paramagnetic
-    flat-DOS setups leave completely untested: the D_2 term and the sigma /
+    box-shaped-DOS setups leave completely untested: the D_2 term and the sigma /
     sigma-bar index structure of the band-shift correlator.
 
     Deliberately still a finite band with exponentially smeared edges. A
@@ -249,7 +249,7 @@ HEADER = (
 
 def part_a(tmp_dir: str) -> None:
     print("\n" + "=" * 100)
-    print("A. GRID CONVERGENCE of int dw w^m A(w)   [flat DOS, plain KK-IPT-n0, V=1]")
+    print("A. GRID CONVERGENCE of int dw w^m A(w)   [box-shaped DOS, plain KK-IPT-n0, V=1]")
     print("   Fixed spacing dw = %.4f; the IPT diagram's support reaches ~3 x D = %.0f." % (DW, 3 * D_HALF_BANDWIDTH))
     print("=" * 100)
 
@@ -257,21 +257,21 @@ def part_a(tmp_dir: str) -> None:
         print(f"\n  eps = {eps}   ({case})")
         print("  " + HEADER)
         for w_max in (30.0, 40.0, 50.0, 60.0):
-            _, report = run(flat_dos_input(eps, w_max, potthoff=False, tmp_dir=tmp_dir))
+            _, report = run(box_shaped_dos_input(eps, w_max, potthoff=False, tmp_dir=tmp_dir))
             label = f"w_max={w_max:.0f}, N={_n_points(w_max)}"
             print("  " + moment_row(label, report))
 
 
 def part_b(w_max: float, tmp_dir: str) -> None:
     print("\n" + "=" * 100)
-    print(f"B. PLAIN vs POTTHOFF  [flat DOS, V=1, w_max={w_max:.0f}, N={_n_points(w_max)}]")
+    print(f"B. PLAIN vs POTTHOFF  [box-shaped DOS, V=1, w_max={w_max:.0f}, N={_n_points(w_max)}]")
     print("=" * 100)
 
     for case, eps in ONSITE_CASES.items():
         print(f"\n  eps = {eps}   ({case})")
         print("  " + HEADER)
         for potthoff in (False, True):
-            solver, report = run(flat_dos_input(eps, w_max, potthoff, tmp_dir))
+            solver, report = run(box_shaped_dos_input(eps, w_max, potthoff, tmp_dir))
             label = "Potthoff m=3" if potthoff else "plain KK-IPT-n0"
             print("  " + moment_row(label, report))
             summarize(solver, report, potthoff)

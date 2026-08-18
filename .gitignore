@@ -13,3 +13,4 @@ results/
 texput.log
 research/
 examples/__pycache__/
+docs/_build/

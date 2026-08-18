@@ -80,7 +80,7 @@ def _wrap(dynamic: dict, eps: float, potthoff: bool, tmp_dir: str) -> dict:
     }
 
 
-def flat_dos(eps: float, potthoff: bool, tmp_dir: str) -> dict:
+def box_shaped_dos(eps: float, potthoff: bool, tmp_dir: str) -> dict:
     """The preprint's leads: D = 10 Gamma, t_l = t_r = 1/sqrt(2), T_fict = 1/2."""
     return _wrap(
         {
@@ -110,8 +110,8 @@ def semicircular(eps: float, potthoff: bool, tmp_dir: str) -> dict:
     m=0 normalization. With half-bandwidth 10 both Hubbard bands stay inside the
     bath band and the problem does not arise; at half-bandwidth 2 the upper
     Hubbard band sits near w = +5.9, outside it, and int A drops to ~0.97 on this
-    grid. The smeared flat DOS above is immune because its Im Delta^R never
-    vanishes exactly.
+    grid. The smeared box-shaped DOS above is immune because its Im Delta^R
+    never vanishes exactly.
     """
     return _wrap(
         {"T": T, "Delta_D": 10.0, "Delta_center": 0.0, "mu": 0.0, "V": V},
@@ -141,7 +141,7 @@ def fixture_delta(eps: float, potthoff: bool, tmp_dir: str) -> dict:
 
 
 BUILDERS = {
-    "flat_dos": flat_dos,
+    "box_shaped_dos": box_shaped_dos,
     "semicircular": semicircular,
     "fixture_delta": fixture_delta,
 }
@@ -229,7 +229,7 @@ def test_third_moment_vanishes_at_particle_hole_symmetry(potthoff, tmp_path):
     atomic part cancels, D_2 = 0 for a symmetric bath, and the band-shift
     correlator vanishes by symmetry.
     """
-    solver = Solver(flat_dos(PH_SYMMETRIC_EPS, potthoff, tmp_path))
+    solver = Solver(box_shaped_dos(PH_SYMMETRIC_EPS, potthoff, tmp_path))
     sol = solver.solve()
     assert sol.success
 
@@ -260,7 +260,7 @@ def test_band_shift_correlator_matches_solver_internal(solved):
     integrate the same thing -- the former returns it raw, the latter divides by
     n(1-n) and adds the onsite energy. Guards the two against drifting apart.
     """
-    solver, _, _ = solved("flat_dos", -2.25, True)
+    solver, _, _ = solved("box_shaped_dos", -2.25, True)
 
     for fl in solver.flavors:
         n_fl = float(np.real(solver.n_occ[fl]))
@@ -278,7 +278,7 @@ def test_third_moment_needs_the_band_shift_term(solved):
     clearly worse for the corrected solution -- i.e. the term is doing real work
     and is not an incidental small correction.
     """
-    solver, _, report = solved("flat_dos", 0.0, True)
+    solver, _, report = solved("box_shaped_dos", 0.0, True)
 
     for fl in solver.flavors:
         entry = report[fl]["moments"][3]

@@ -28,16 +28,67 @@ class ConvergenceError(RuntimeError):
     """
     Raised when the coupled root solve fails on every restart attempt.
 
-    A non-converged solve leaves G, Sigma and the occupations at whatever point
-    the root-finder stopped at. Those are not a solution of the impurity
-    problem, and feeding them into an outer loop (e.g. DMFT) silently poisons
-    every subsequent iteration. Failing loudly is therefore the default; set
-    'on_convergence_failure' to 'warn' to get the old behaviour of returning the
-    non-converged result instead.
+    Notes
+    -----
+    A non-converged solve leaves `G`, `Sigma` and the occupations at
+    whatever point the root-finder stopped at. Those are not a solution of
+    the impurity problem, and feeding them into an outer loop (e.g. DMFT)
+    silently poisons every subsequent iteration. Failing loudly is
+    therefore the default; set ``on_convergence_failure`` to ``"warn"`` to
+    get the old behaviour of returning the non-converged result instead.
     """
 
 
 class Solver:
+    """
+    Nonequilibrium Kajueter-Kotliar IPT impurity solver.
+
+    Construct from a JSON-schema-checked input dictionary, call
+    :meth:`solve`, then read off :attr:`n_occ`, :attr:`n_double`,
+    :attr:`GF`, :attr:`SE`. See the package README for the full physics
+    background and the input-parameter reference.
+
+    Parameters
+    ----------
+    input_data : dict
+        Solver input, with top-level keys ``"global_parameters"`` (grid,
+        `U`, flavor names) and ``"solver"`` (``"static"``, ``"modifiable"``,
+        ``"dynamic"`` sub-sections -- solver flags, the onsite energy, and
+        the hybridization/bath specification, respectively). Validated
+        against ``schemas/solver.schema.json`` and
+        ``schemas/global_parameters.schema.json``.
+
+    Attributes
+    ----------
+    w : numpy.ndarray
+        Frequency grid, ``linspace(-w_max, w_max, N_points)``.
+    flavors : list[str]
+        The two spin-flavor labels (e.g. ``["up", "down"]``).
+    G0 : dict[str, Keldysh]
+        Weiss field, per flavor.
+    GF : dict[str, Keldysh]
+        Interacting impurity Green's function, per flavor.
+    SE : dict[str, Keldysh]
+        Self-energy, per flavor.
+    Delta : dict[str, Keldysh]
+        Hybridization function, per flavor.
+    n_occ : dict[str, float]
+        Converged occupations, per flavor.
+    n_double : float
+        Double occupancy, averaged over both flavors (see
+        :meth:`calc_occupations`).
+    n_double_per_flavor : dict[str, float]
+        The two flavor-resolved double-occupancy estimates `n_double` is
+        averaged from.
+    solve_residual : float
+        Residual norm of the accepted solution (see :meth:`solve`).
+
+    Raises
+    ------
+    ValueError
+        If ``input_data`` has no ``"solver"`` key, or
+        ``on_convergence_failure`` is not ``"raise"``/``"warn"``.
+    """
 
     def __init__(self, input_data: dict) -> None:
         if "solver" not in input_data.keys():
@@ -159,7 +210,7 @@ class Solver:
 
     def _load_config(self) -> None:
         """
-        Validates the input data and sets parameters which are defined indirectly.
+        Apply ``solver.static``/``modifiable``/``dynamic`` and derive `w`, `impurity_onsite_e`.
         """
 
         self.default_config_static.update(self.input_data["solver"]["static"])
@@ -199,17 +250,21 @@ class Solver:
                 self.impurity_onsite_e[fl] = -self.U / 2
 
     def _clip_occ(self, n: float) -> float:
+        """Clip an occupation into ``(0, 1)``, away from the exact endpoints where 1/n(1-n) diverges."""
         return float(np.clip(n, 1e-8, 1 - 1e-8))
 
     def _other_flavor(self, fl: str) -> str:
+        """Return the flavor label that is not `fl` (this solver assumes exactly 2 flavors)."""
         if len(self.flavors) != 2:
             raise ValueError("This implementation assumes exactly 2 flavors.")
         return self.flavors[1] if fl == self.flavors[0] else self.flavors[0]
 
     def _lesser(self, G: Keldysh) -> np.ndarray:
+        r"""Lesser component, :math:`G^< = G^K/2 - i\,\mathrm{Im}\,G^R`."""
         return G.K / 2.0 - 1j * np.imag(G.R)
 
     def _greater(self, G: Keldysh) -> np.ndarray:
+        r"""Greater component, :math:`G^> = G^K/2 + i\,\mathrm{Im}\,G^R`."""
         return G.K / 2.0 + 1j * np.imag(G.R)
 
     def _as_flavor_dict(self, value, name: str) -> dict[str, float]:
@@ -222,12 +277,14 @@ class Solver:
         return {fl: float(value) for fl in self.flavors}
 
     def _pack_x(self, mu0_dict: dict[str, float], n_dict: dict[str, float]) -> np.ndarray:
+        """Pack per-flavor ``(mu0, n)`` dicts into the flat vector the root-finder solves for."""
         vals = []
         for fl in self.flavors:
             vals.extend([float(mu0_dict[fl]), self._clip_occ(float(n_dict[fl]))])
         return np.array(vals, dtype=float)
 
     def _unpack_x(self, x: np.ndarray) -> tuple[dict[str, float], dict[str, float]]:
+        """Inverse of :meth:`_pack_x`: unpack the flat solver vector back into per-flavor ``(mu0, n)`` dicts."""
         if len(x) != 2 * len(self.flavors):
             raise ValueError("Input vector has wrong size for the number of flavors.")
 
@@ -241,6 +298,17 @@ class Solver:
         return mu0_dict, n_dict
 
     def store_output(self) -> None:
+        """
+        Write the full solution to a JSON file under ``output_dir``.
+
+        No-op if ``store`` is `False`. The written file contains, per
+        flavor, the Green's function and self-energy arrays, occupations,
+        interpolation coefficients and band-shift diagnostics; plus
+        convergence provenance (``converged``, ``residual_norm``,
+        ``solve_attempts``, ``solve_strategy``), the resolved input
+        parameters, and a timestamp/git-commit metadata block. Filename is
+        ``solver_output_<ISO-timestamp-with-microseconds>.json``.
+        """
         if not self.store:
             return
 
@@ -327,40 +395,86 @@ class Solver:
             json.dump(data, file, indent=4)
 
     def set_spin_symmetry(self, spin_sym: bool) -> None:
+        """Set the ``spin_sym`` flag after construction.
+
+        Parameters
+        ----------
+        spin_sym : bool
+            Whether to enforce spin symmetry (both flavors share the same
+            onsite energy).
+        """
         self.spin_sym = spin_sym
 
     def set_onsite_energies_external(self, impurity_onsite_e: dict[str, float]) -> None:
+        """
+        Override the per-flavor onsite energy from outside, e.g. from a DMFT self-consistency loop.
+
+        Parameters
+        ----------
+        impurity_onsite_e : dict[str, float]
+            New onsite energy, per flavor.
+        """
         self.impurity_onsite_e = impurity_onsite_e
 
     def set_Delta_external(self, Delta: Keldysh) -> None:
+        """
+        Override the hybridization function from outside, e.g. from a DMFT self-consistency loop.
+
+        Bypasses :meth:`_set_Delta` entirely, so any of the four
+        ``solver.dynamic`` hybridization specifications can be replaced by
+        an externally computed one between solves.
+
+        Parameters
+        ----------
+        Delta : dict[str, Keldysh]
+            New hybridization function, per flavor.
+        """
         self.Delta = Delta
 
     def set_output_external(self, directory: str, filename: str) -> None:
+        """
+        Override the output directory and filename set by ``solver.dynamic``.
+
+        Parameters
+        ----------
+        directory : str
+            New output directory.
+        filename : str
+            New output filename.
+        """
         self.output_dir = directory
         self.filename = filename
 
     def _set_Delta(self) -> None:
         """
-        Builds the hybridization function Delta, in order of precedence:
-          1. explicit 'Delta_R_im'/'Delta_K_im' arrays (fully general, per flavor);
-          2. a semi-elliptic ("semicircular") band of half-bandwidth 'Delta_D'
-             centered on 'Delta_center' (both required, as for the Lorentzian);
-          3. a Lorentzian of center 'Delta_center' and width 'Delta_gamma';
-          4. the flat-DOS fallback built from 'T_fict', 'D_l', 'D_r', 't_l', 't_r'.
+        Build the hybridization function :attr:`Delta` from ``solver.dynamic``.
+
+        Tried in order of precedence, reading from attributes already set by
+        :meth:`_load_config`:
+
+        1. explicit ``Delta_R_im``/``Delta_K_im`` arrays (fully general, per
+           flavor);
+        2. a semi-elliptic ("semicircular") band of half-bandwidth
+           ``Delta_D`` centered on ``Delta_center`` (both required, as for
+           the Lorentzian);
+        3. a Lorentzian of center ``Delta_center`` and width ``Delta_gamma``;
+        4. the box-shaped-DOS fallback built from ``T_fict``, ``D_l``, ``D_r``,
+           ``t_l``, ``t_r``.
 
         For 2. and 3., each shape parameter may be a single number
-        (spin-symmetric/degenerate hybridization, shared by both flavors) or a
-        per-flavor dict (spin-dependent hybridization).
+        (spin-symmetric/degenerate hybridization, shared by both flavors) or
+        a per-flavor dict (spin-dependent hybridization; see
+        :meth:`_as_flavor_dict`).
         """
         try:
-            flat_DOS = False
+            box_shaped_dos = False
             _ = self.Delta_R_im
         except Exception:
-            flat_DOS = True
+            box_shaped_dos = True
 
         semicircular_hyb = False
         lorentzian_hyb = False
-        if flat_DOS:
+        if box_shaped_dos:
             semicircular_hyb = hasattr(self, "Delta_D")
             try:
                 _ = self.Delta_center
@@ -473,11 +587,11 @@ class Solver:
 
             return
 
-        if flat_DOS:
-            print("No hybridization has been given. A flat DOS with fictitious inverse temperature and fixed bandwidth is being used.")
+        if box_shaped_dos:
+            print("No hybridization has been given. A box-shaped DOS with fictitious inverse temperature and fixed bandwidth is being used.")
 
         for fl in self.flavors:
-            if flat_DOS:
+            if box_shaped_dos:
                 mu_l = self.mu + self.V / 2
                 mu_r = self.mu - self.V / 2
 
@@ -504,14 +618,28 @@ class Solver:
                 self.Delta[fl].R, _ = KK(self.w, np.imag(self.Delta[fl].R))
 
     def calc_G0(self, mu0: float, fl: str) -> None:
-        """
-        Constructs the Weiss field (G0) from a given hybridization function according
-        to the modified IPT scheme in Phys. Rev. Lett. 77 131 (1996).
-        It assumes the auxiliary potential 'mu0' has been passed correctly,
-        i.e. it corresponds to the current flavor 'fl' handled in this function.
+        r"""
+        Construct the Weiss field :attr:`G0` for one flavor from the hybridization.
 
-        Written as the literal Dyson equation G0 = (G0^-1)^-1, with
-        G0^-1 = (w + mu0) - Delta (Delta plays the role of a self-energy here).
+        Kajueter-Kotliar modified-IPT Weiss field [Phys. Rev. Lett. 77, 131
+        (1996)]:
+
+        .. math::
+
+            \mathcal{G}_{0,\sigma}^{-1}(\omega) = \omega + \mu_{0,\sigma} - \Delta_\sigma(\omega)
+
+        written as the literal Dyson equation
+        :math:`\mathcal{G}_{0,\sigma} = (\mathcal{G}_{0,\sigma}^{-1})^{-1}`,
+        with :math:`\Delta_\sigma` playing the role of a self-energy here.
+
+        Parameters
+        ----------
+        mu0 : float
+            Auxiliary chemical potential for flavor `fl`. Caller's
+            responsibility to pass the value that actually corresponds to
+            `fl`.
+        fl : str
+            Which flavor to build the Weiss field for.
         """
         G0_inv = Keldysh(R=self.w + mu0, K=0) - self.Delta[fl]
         self.G0[fl] = G0_inv.inverse()
@@ -521,8 +649,24 @@ class Solver:
         self.G0[fl].calc_occupation()
 
     def _calc_IPT_diagram(self, enforce_anti_herm: bool = True) -> None:
-        """
-        Computes the 2nd-order IPT diagram for all flavors from the current Weiss field (G0).
+        r"""
+        Compute the bare second-order (Kajueter-Kotliar) bubble diagram, :attr:`IPT_diag`.
+
+        .. math::
+
+            \tilde\Sigma_\sigma(\tau) = U^2\,\mathcal{G}_{0,\sigma}(\tau)\,
+            \mathcal{G}_{0,\bar\sigma}(\tau)\,\mathcal{G}_{0,\bar\sigma}(-\tau)
+
+        for both flavors, from the current :attr:`G0`. This is the raw
+        diagram that :meth:`calc_SE` feeds into the KK-IPT interpolation
+        Ansatz -- not the self-energy itself.
+
+        Parameters
+        ----------
+        enforce_anti_herm : bool, default=True
+            If `True`, discard the (numerically spurious) real part of the
+            greater/lesser components before reconstructing the retarded
+            part via Kramers-Kronig.
         """
         dw = abs(self.w[1] - self.w[0])
         factor = (dw / (2 * np.pi)) ** 2 * self.U ** 2
@@ -564,16 +708,75 @@ class Solver:
             self.IPT_diag[fl].K = diag_K
 
     def calc_SE(self, mu0: float, n0_bar: float, n_bar: float, fl: str, recompute_ipt: bool = True) -> None:
-        """
-        Computes electronic self-energy (SE) using the generalized IPT Ansatz.
-        The subscript 'bar' denotes the quantities of the opposite spin species.
-        When no subscript is present it is implied that the quantity
-        corresponding to the current flavor 'fl' has been passed correctly.
+        r"""
+        Compute the self-energy :attr:`SE` for one flavor via the generalized KK-IPT Ansatz.
 
-        If 'use_potthoff_band_shift' is True, beta (the coefficient 'B' below) is
-        corrected by the nonequilibrium analogue of the Potthoff-Wegner-Nolting
-        (PRB 55, 16132) m=3 moment term, B_tilde[other] - B0_tilde[other], which
-        must have been (re)computed beforehand, e.g. in '_build_state'.
+        .. math::
+
+            \Sigma_\sigma^R(\omega) = U n_{\bar\sigma}
+            + \frac{\alpha_\sigma \tilde\Sigma_\sigma^R(\omega)}
+            {1 - \beta_\sigma \tilde\Sigma_\sigma^R(\omega)}
+
+        with the interpolation coefficients
+
+        .. math::
+
+            \alpha_\sigma = \frac{n_{\bar\sigma}(1-n_{\bar\sigma})}{n_{0,\bar\sigma}(1-n_{0,\bar\sigma})},
+            \qquad
+            \beta_\sigma = \frac{(1-n_{\bar\sigma})U + \epsilon_{f,\sigma} + \mu_{0,\sigma}}
+            {n_{0,\bar\sigma}(1-n_{0,\bar\sigma}) U^2}
+
+        fixed by exact atomic-limit matching, and :math:`\tilde\Sigma_\sigma`
+        the bare bubble diagram from :meth:`_calc_IPT_diagram`. The Keldysh
+        component :attr:`SE`\ ``.K`` follows the same coefficients (see the
+        package README for the full expression).
+
+        The subscript "bar" denotes the quantities of the opposite spin
+        species. When no subscript is present it is implied that the
+        quantity corresponding to the current flavor `fl` has been passed
+        correctly.
+
+        Parameters
+        ----------
+        mu0 : float
+            Auxiliary chemical potential for flavor `fl`.
+        n0_bar : float
+            Weiss-field occupation of the *opposite* flavor.
+        n_bar : float
+            True occupation of the *opposite* flavor.
+        fl : str
+            Which flavor to compute the self-energy for.
+        recompute_ipt : bool, default=True
+            If `True`, call :meth:`_calc_IPT_diagram` first. Pass `False`
+            when the diagram is already current (e.g. inside the Potthoff
+            inner loop of :meth:`_build_state`, where `G0` does not change
+            between iterations).
+
+        Notes
+        -----
+        If ``use_potthoff_band_shift`` is `True`, :math:`\beta_\sigma`
+        (the coefficient above) is additionally corrected by the
+        nonequilibrium analogue of the Potthoff-Wegner-Nolting [Phys. Rev. B
+        55, 16132 (1997)] :math:`m=3` moment band-shift term:
+
+        .. math::
+
+            \beta_\sigma = \frac{(1-n_{\bar\sigma})U + \epsilon_{f,\sigma} + \mu_{0,\sigma}
+            + \big(\tilde B_{\bar\sigma} - \tilde B_{0,\bar\sigma}\big)}
+            {n_{0,\bar\sigma}(1-n_{0,\bar\sigma}) U^2}
+
+        i.e. ``B_tilde[other] - B0_tilde[other]`` is added to the plain
+        numerator above -- a genuinely new additive term, not a substitution
+        of anything already present (:math:`\epsilon_{f,\bar\sigma}` does not
+        otherwise appear in :math:`\beta_\sigma`). It vanishes, and the plain
+        coefficient is recovered exactly, whenever
+        :math:`\tilde B_{\bar\sigma} = \tilde B_{0,\bar\sigma}` -- in
+        particular at the start of the inner fixed-point loop described in
+        :meth:`_build_state`, and always in the paramagnetic case. See
+        :doc:`../theory/potthoff_band_shift` for the full derivation and why
+        this restores the exact :math:`M_3` spectral moment.
+        :math:`\tilde B_{\bar\sigma}`, :math:`\tilde B_{0,\bar\sigma}` must
+        have been (re)computed beforehand, e.g. in :meth:`_build_state`.
         """
         if recompute_ipt:
             self._calc_IPT_diagram()
@@ -609,15 +812,26 @@ class Solver:
         self.SE[fl].calc_occupation()
 
     def calc_GF(self, mu0: float, fl: str) -> None:
-        """
-        Given the auxiliary chemical potential 'mu0' and flavor 'fl'
-        computes the interacting impurity Green's function (GF) from Weiss field (G0)
-        and electronic self-energy (SE) for the corresponding flavor.
+        r"""
+        Compute the interacting Green's function :attr:`GF` for one flavor.
 
-        Written as the literal Dyson equation G = (G0^-1 - shift - Sigma)^-1,
-        where 'shift' (mu0 + impurity_onsite_e) is the auxiliary-potential
-        correction that must be subtracted back out of G0's own inverse
-        (see calc_G0's docstring).
+        .. math::
+
+            G_\sigma = \left(\mathcal{G}_{0,\sigma}^{-1} - \mathrm{shift}_\sigma - \Sigma_\sigma\right)^{-1}
+
+        the literal Dyson equation, where
+        :math:`\mathrm{shift}_\sigma = \mu_{0,\sigma} + \epsilon_{f,\sigma}`
+        is the auxiliary-potential correction that must be subtracted back
+        out of :math:`\mathcal{G}_{0,\sigma}`'s own inverse (see
+        :meth:`calc_G0`).
+
+        Parameters
+        ----------
+        mu0 : float
+            Auxiliary chemical potential for flavor `fl`.
+        fl : str
+            Which flavor to compute the Green's function for. Requires
+            :attr:`G0` and :attr:`SE` for this flavor to already be current.
         """
         shift = mu0 + self.impurity_onsite_e[fl]
         GF_inv = self.G0[fl].inverse() - shift - self.SE[fl]
@@ -628,17 +842,57 @@ class Solver:
         self.GF[fl].calc_occupation()
 
     def _calc_band_shift_weiss(self, fl: str, *, n0_fl: float, n0_bar: float) -> float:
-        """
-        Weiss/Hartree-Fock-level band shift B0_tilde_fl, the nonequilibrium Keldysh
-        analogue of Potthoff-Wegner-Nolting (PRB 55, 16132) Eq. (13)/(29):
+        r"""
+        Weiss/Hartree-Fock-level band shift :math:`\tilde B_{0,\sigma}`.
 
-            B0_tilde_fl = eps_fl
-                + (2 n0_bar - 1) / [n0_fl(1-n0_fl)]
-                  * (-i) int dw/(2 pi) [G0_fl^R Delta_fl^< + G0_fl^< Delta_fl^A]
+        The nonequilibrium Keldysh analogue of Potthoff-Wegner-Nolting
+        [Phys. Rev. B 55, 16132 (1997)] Eq. (13)/(29):
 
-        Its value is combined with the interacting counterpart 'B_tilde' (see
-        '_calc_band_shift_interacting') and enters the self-energy of the
-        opposite flavor via 'calc_SE'.
+        .. math::
+
+            \tilde B_{0,\sigma} = \epsilon_{f,\sigma} + \frac{2n_{0,\bar\sigma}-1}
+            {n_{0,\sigma}(1-n_{0,\sigma})}\,(-i)\int\frac{d\omega}{2\pi}
+            \big[\mathcal{G}_{0,\sigma}\Delta_\sigma\big]^<(\omega)
+
+        with the lesser component of the product expanded via the Langreth rules,
+
+        .. math::
+
+            \big[\mathcal{G}_{0,\sigma}\Delta_\sigma\big]^<(\omega) =
+            \mathcal{G}_{0,\sigma}^R(\omega)\,\Delta_\sigma^<(\omega)
+            + \mathcal{G}_{0,\sigma}^<(\omega)\,\Delta_\sigma^A(\omega)
+
+        Parameters
+        ----------
+        fl : str
+            Flavor to compute :math:`\tilde B_{0,\sigma}` for.
+        n0_fl : float
+            Weiss-field occupation of `fl`.
+        n0_bar : float
+            Weiss-field occupation of the opposite flavor.
+
+        Returns
+        -------
+        float
+            :math:`\tilde B_{0,\sigma}`.
+
+        Notes
+        -----
+        A functional of :attr:`G0` and :attr:`Delta` alone -- unlike its
+        interacting counterpart :attr:`B_tilde` (see
+        :meth:`_calc_band_shift_interacting`), it needs no self-energy or
+        interacting Green's function, so it is cheap to (re)compute at the
+        start of every trial state in :meth:`_build_state`, before the inner
+        fixed-point loop begins. It seeds that loop: :math:`\tilde B_\sigma`
+        starts out equal to :math:`\tilde B_{0,\sigma}`, at which point the
+        correction below vanishes and :meth:`calc_SE` reduces exactly to the
+        plain (uncorrected) coefficients.
+
+        It combines with the same flavor's interacting counterpart as
+        :math:`\tilde B_\sigma - \tilde B_{0,\sigma}`; that difference is
+        what actually enters the self-energy of the *opposite* flavor
+        :math:`\bar\sigma` via :meth:`calc_SE` (see Eq. below in
+        :meth:`_calc_band_shift_interacting`).
         """
         n0_fl = self._clip_occ(n0_fl)
         n0_bar = self._clip_occ(n0_bar)
@@ -656,14 +910,48 @@ class Solver:
         return float(np.real(B0_tilde))
 
     def _calc_band_shift_interacting(self, fl: str, *, n_fl: float) -> float:
-        """
-        Interacting band shift B_tilde_fl, the nonequilibrium Keldysh analogue of
-        Potthoff-Wegner-Nolting (PRB 55, 16132) Eq. (44) with Q_fl = 2 Sigma_fl/U - 1:
+        r"""
+        Interacting band shift :math:`\tilde B_\sigma`.
 
-            n_fl(1-n_fl) B_tilde_fl = n_fl(1-n_fl) eps_fl
-                - i int dw/(2 pi) [Q_fl G_fl Delta_fl]^<
+        The nonequilibrium Keldysh analogue of Potthoff-Wegner-Nolting
+        [Phys. Rev. B 55, 16132 (1997)] Eq. (44) with
+        :math:`Q_\sigma = 2\Sigma_\sigma/U - 1`:
 
-        Requires SE[fl] and GF[fl] to already correspond to the current trial state.
+        .. math::
+
+            \tilde B_\sigma = \epsilon_{f,\sigma} + \frac{1}{n_\sigma(1-n_\sigma)}\,
+            (-i)\int\frac{d\omega}{2\pi}\big[Q_\sigma G_\sigma \Delta_\sigma\big]^<(\omega)
+
+        with the lesser component of the triple product expanded via the
+        Langreth rules,
+
+        .. math::
+
+            \big[Q_\sigma G_\sigma \Delta_\sigma\big]^< =
+            Q_\sigma^R G_\sigma^R \Delta_\sigma^< + Q_\sigma^R G_\sigma^< \Delta_\sigma^A
+            + Q_\sigma^< G_\sigma^A \Delta_\sigma^A
+
+        where :math:`Q_\sigma^R = 2\Sigma_\sigma^R/U - 1` and
+        :math:`Q_\sigma^< = 2\Sigma_\sigma^</U`.
+
+        Parameters
+        ----------
+        fl : str
+            Flavor to compute :math:`\tilde B_\sigma` for. Requires
+            :attr:`SE`\ ``[fl]`` and :attr:`GF`\ ``[fl]`` to already
+            correspond to the current trial state.
+        n_fl : float
+            True occupation of `fl`.
+
+        Returns
+        -------
+        float
+            :math:`\tilde B_\sigma`.
+
+        Raises
+        ------
+        ValueError
+            If `U` is (numerically) zero.
         """
         if abs(self.U) < 1e-12:
             raise ValueError("Potthoff band-shift correction requires finite U.")
@@ -695,14 +983,28 @@ class Solver:
 
     def _build_state(self, mu0_all: dict[str, float], n_all: dict[str, float]) -> dict[str, float]:
         """
-        Given trial values of mu0 and n for all flavors, builds G0, IPT diagram,
-        SE, GF consistently for all flavors. Returns n0_all.
+        Build `G0`, the IPT diagram, `SE`, `GF` consistently for all flavors from trial `(mu0, n)`.
 
-        If 'use_potthoff_band_shift' is True, an inner fixed-point loop is run to
-        self-consistently determine the interacting band shift 'B_tilde' (the m=3
-        moment correction of Potthoff-Wegner-Nolting, PRB 55, 16132), starting each
-        time from its Weiss-field/HF estimate 'B0_tilde'. With the flag False this
-        reduces exactly to the KK-IPT-n0 scheme.
+        Parameters
+        ----------
+        mu0_all : dict[str, float]
+            Trial auxiliary chemical potential, per flavor.
+        n_all : dict[str, float]
+            Trial occupation, per flavor.
+
+        Returns
+        -------
+        dict[str, float]
+            The resulting Weiss-field occupation, per flavor (``n0_all``).
+
+        Notes
+        -----
+        If ``use_potthoff_band_shift`` is `True`, an inner fixed-point loop
+        is run to self-consistently determine the interacting band shift
+        :attr:`B_tilde` (the :math:`m=3` moment correction of
+        Potthoff-Wegner-Nolting [Phys. Rev. B 55, 16132 (1997)]), starting
+        each time from its Weiss-field/HF estimate :attr:`B0_tilde`. With
+        the flag `False` this reduces exactly to the KK-IPT-n0 scheme.
         """
         for fl in self.flavors:
             self.calc_G0(mu0_all[fl], fl)
@@ -796,11 +1098,21 @@ class Solver:
 
     def residual_vector(self, x: np.ndarray) -> np.ndarray:
         """
-        Computes the residual of the full four-dimensional vector
-        with the solution x = (mu0_up, n_up, mu0_dn, n_dn).
+        Residual of the coupled 4D self-consistency, for use with `scipy.optimize.root`.
 
-        Residuals are returned in the same flavor order:
-        [n - n_trial, n - n0] for each flavor (up, dn).
+        Parameters
+        ----------
+        x : numpy.ndarray
+            Packed trial vector ``(mu0_up, n_up, mu0_down, n_down)`` (see
+            :meth:`_pack_x`).
+
+        Returns
+        -------
+        numpy.ndarray
+            Residuals in the same flavor order: ``[n - n_trial, n - n0]``
+            for each flavor, where `n_trial` is the occupation integrated
+            from the just-built `GF` and `n0` from `G0`. Zero at the
+            self-consistent solution.
         """
         mu0_all, n_all = self._unpack_x(x)
         n0_all = self._build_state(mu0_all, n_all)
@@ -816,25 +1128,31 @@ class Solver:
         return np.array(res, dtype=float)
 
     def calc_occupations(self) -> None:
-        """
-        Computes the particle number of the impurity GF and Weiss field G0
-        via the generalized distribution function and the double occupation.
+        r"""
+        Compute :attr:`n_occ`, :attr:`n0_occ` and :attr:`n_double`.
 
-        n_double uses the exact Keldysh Galitskii-Migdal expression for the
-        double occupancy (general, valid in and out of equilibrium), evaluated
-        per flavor and averaged over the spin species:
+        :attr:`n_double` uses the exact Keldysh Galitskii-Migdal expression
+        for the double occupancy (general, valid in and out of
+        equilibrium), evaluated per flavor and averaged over the spin
+        species:
 
-            n_d = -i/(2*pi*U) * (1/2) * sum_{s} integral dw [Sigma^R_{s}(w) G^<_{s}(w) + Sigma^<_{s}(w) G^A_{s}(w)]
+        .. math::
 
-        with X^< = X^K/2 - i*Im(X^R) and X^A = (X^R)^*.
+            n_d = -\frac{i}{2\pi U}\cdot\frac{1}{2}\sum_\sigma\int d\omega\,
+            \big[\Sigma^R_\sigma(\omega) G^<_\sigma(\omega) + \Sigma^<_\sigma(\omega) G^A_\sigma(\omega)\big]
 
-        This is an exact identity, so the two flavor-resolved estimates must
-        coincide for the true interacting solution -- but within an
+        with :math:`X^< = X^K/2 - i\,\mathrm{Im}\,X^R` and
+        :math:`X^A = (X^R)^*`.
+
+        Notes
+        -----
+        This is an exact identity, so the two flavor-resolved estimates
+        must coincide for the true interacting solution -- but within an
         approximate self-energy scheme they need not agree exactly once the
         solution is spin-polarized. The individual values are kept in
-        'n_double_per_flavor' as a diagnostic: a large spread between them is
-        a direct measure of how badly the approximation violates this exact
-        flavor-independence.
+        :attr:`n_double_per_flavor` as a diagnostic: a large spread between
+        them is a direct measure of how badly the approximation violates
+        this exact flavor-independence.
         """
         for fl in self.flavors:
             self.n_occ[fl] = np.trapezoid(self.GF[fl].N, self.w)
@@ -859,14 +1177,28 @@ class Solver:
         """
         Ordered fallback starting points, tried in turn when the first solve fails.
 
+        Parameters
+        ----------
+        x0_initial : numpy.ndarray
+            The initial packed guess that just failed, used to seed several
+            of the fallback candidates (e.g. the jittered restarts).
+
+        Returns
+        -------
+        list[tuple[str, numpy.ndarray, str]]
+            ``(label, x_start, method)`` triples, duplicates against
+            `x0_initial` removed, in the order they should be tried.
+
+        Notes
+        -----
         In practice the failures come from the root-finder wandering into
-        occupations pathologically close to 0 or 1, where the n(1-n) denominators
-        in the IPT coefficients (and in B_tilde) blow up. The ladder therefore
-        first spreads the starting occupations out, then offers a Weiss field
-        whose pole is aligned with the Hartree-shifted impurity level, then
-        switches algorithm to Levenberg-Marquardt, and finally jitters around the
-        original guess. The jitter is seeded, so the whole sequence is
-        reproducible.
+        occupations pathologically close to 0 or 1, where the :math:`n(1-n)`
+        denominators in the IPT coefficients (and in `B_tilde`) blow up. The
+        ladder therefore first spreads the starting occupations out, then
+        offers a Weiss field whose pole is aligned with the Hartree-shifted
+        impurity level, then switches algorithm to Levenberg-Marquardt, and
+        finally jitters around the original guess. The jitter is seeded, so
+        the whole sequence is reproducible.
         """
         fl_a, fl_b = self.flavors
         zero_mu = {fl: 0.0 for fl in self.flavors}
@@ -933,16 +1265,45 @@ class Solver:
 
     def solve(self, *, maxfev: int = 1000, res_tol: float = 1e-8):
         """
-        Solves the coupled four-dimensional nonlinear set of equations
-        to find the vector (mu0_up, n_up, mu0_dn, n_dn).
+        Solve the coupled four-dimensional self-consistency for ``(mu0_up, n_up, mu0_down, n_down)``.
 
-        If the root solve fails, up to 'max_restarts' further starting points are
-        tried (see '_restart_strategies'). Whatever happens, the state left on the
-        solver is rebuilt from the attempt with the smallest residual, not merely
-        the last one attempted. If nothing converges, the failure is reported and
-        -- unless 'on_convergence_failure' is set to 'warn' -- a ConvergenceError
-        is raised, so that a non-solution cannot silently propagate into an outer
-        self-consistency loop.
+        Parameters
+        ----------
+        maxfev : int, default=1000
+            Maximum number of function evaluations per solve attempt,
+            passed to `scipy.optimize.root`.
+        res_tol : float, default=1e-8
+            Tolerance passed to `scipy.optimize.root`. Acceptance of the
+            result is decided separately, by ``residual_tol`` against the
+            actual residual norm (see Notes).
+
+        Returns
+        -------
+        scipy.optimize.OptimizeResult
+            The accepted (or best found) root-finder result. ``sol.success``
+            reflects the residual-norm acceptance criterion, not the
+            optimizer's own flag (preserved separately as
+            ``sol.scipy_success``). Also populates :attr:`n_occ`,
+            :attr:`n_double`, :attr:`GF`, :attr:`SE`, :attr:`G0`,
+            :attr:`solve_attempts`, :attr:`solve_strategy` and
+            :attr:`solve_residual`.
+
+        Raises
+        ------
+        ConvergenceError
+            If no attempt converges and ``on_convergence_failure`` is
+            ``"raise"`` (the default).
+
+        Notes
+        -----
+        If the root solve fails, up to ``max_restarts`` further starting
+        points are tried (see :meth:`_restart_strategies`). Whatever
+        happens, the state left on the solver is rebuilt from the attempt
+        with the smallest residual, not merely the last one attempted. If
+        nothing converges, the failure is reported and -- unless
+        ``on_convergence_failure`` is set to ``"warn"`` -- a
+        :class:`ConvergenceError` is raised, so that a non-solution cannot
+        silently propagate into an outer self-consistency loop.
         """
         start_t = time()
 

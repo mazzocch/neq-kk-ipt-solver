@@ -47,7 +47,7 @@ def _build_input(case: str, tmp_path) -> dict:
     case_data = FIXTURE[case]
 
     # 'T' is not part of global_parameters.schema.json (it's only meaningful
-    # to the solver's own flat-DOS/Lorentzian hybridization construction, see
+    # to the solver's own box-shaped-DOS/Lorentzian hybridization construction, see
     # solver.dynamic.T) -- drop it here since this fixture supplies the
     # hybridization explicitly and doesn't need it, to avoid a spurious
     # schema-validation warning.
