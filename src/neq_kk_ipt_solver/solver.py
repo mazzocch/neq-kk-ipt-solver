@@ -666,7 +666,15 @@ class Solver:
         enforce_anti_herm : bool, default=True
             If `True`, discard the (numerically spurious) real part of the
             greater/lesser components before reconstructing the retarded
-            part via Kramers-Kronig.
+            part via Kramers-Kronig. Measured directly (several
+            representative cases, see
+            ``test_ipt_diagram_anti_hermiticity_enforcement_discards_only_noise``
+            in ``tests/test_solver_basics.py``): that real part sits at
+            double-precision machine epsilon relative to the imaginary part
+            kept, and disabling this entirely reproduces the same solved
+            occupations -- so `False` is equally correct, and `True` stays
+            the default only for the simplicity of a guaranteed-clean
+            invariant, not because it is numerically necessary.
         """
         dw = abs(self.w[1] - self.w[0])
         factor = (dw / (2 * np.pi)) ** 2 * self.U ** 2
@@ -695,6 +703,13 @@ class Solver:
                 mode="same",
             ) * factor
 
+            # Not numerically necessary: the discarded real part is machine
+            # epsilon relative to the imaginary part kept (measured directly,
+            # see test_ipt_diagram_anti_hermiticity_enforcement_discards_only_noise),
+            # and disabling this reproduces the same solved occupations.
+            # Kept as the default anyway, purely so downstream code can rely
+            # on diag_gtr/diag_lss being exactly purely imaginary without
+            # having to reason about whether that holds.
             if enforce_anti_herm:
                 diag_gtr = 1j * diag_gtr.imag
                 diag_lss = 1j * diag_lss.imag
